@@ -14,7 +14,7 @@ export const CONFIG = {
    * consegue ler e alterar a base. Ver README.md → "Segurança".
    */
   API_URL:
-    'https://script.google.com/macros/s/AKfycbzIst_viCTXsj5WSZnC6Aq1Di8lWPv2uH1V2xRt3QtNWbxawsxpuBpcw0-Ac_sPBfjZ/exec',
+    'https://script.google.com/macros/s/AKfycbwcVBoZdvrpPPuwYrHdXupSH3Rb8OJeKqxlAL71M8O6QBxrHxlR5Bys-Uspb3QFAdS7/exec',
 
   /**
    * Token compartilhado enviado em toda requisição (parâmetro `token`).
