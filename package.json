@@ -1,12 +1,24 @@
 {
-  "name": "sentinel",
-  "version": "1.0.0",
+  "name": "sentinel-nexus-v33",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
-  "description": "Controle de validade de certificados e calibrações de equipamentos (Otamerica | Sentinel).",
   "scripts": {
-    "build": "node scripts/build-sw.mjs",
-    "test": "node --test",
-    "serve": "python3 -m http.server 8080"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react-dom": "^19.2.3",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "recharts": "^3.6.0",
+    "@google/genai": "^1.37.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
   }
 }

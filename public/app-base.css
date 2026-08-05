@@ -1,0 +1,53 @@
+      :root { 
+        --bg-primary: #0b1121;
+        --bg-secondary: #050814;
+        --bg-card: rgba(17, 24, 39, 0.92);
+        --brand-primary: #3b82f6;
+        --brand-secondary: #2563eb;
+        --accent-success: #10b981;
+        --accent-warning: #f59e0b;
+        --accent-danger: #ef4444;
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        --border-medium: rgba(148, 163, 184, 0.25);
+        --glow-brand: rgba(59, 130, 246, 0.4);
+      }
+
+      body {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: 'Space Grotesk', sans-serif;
+        overflow: hidden; /* App handles scroll */
+      }
+      
+      /* The Sentinel Background Gradient */
+      body::before {
+        content: '';
+        position: fixed;
+        top: -10%;
+        left: -10%;
+        width: 120%;
+        height: 120%;
+        background: 
+            radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 55%),
+            radial-gradient(circle at 80% 80%, rgba(37, 99, 235, 0.06) 0%, transparent 55%);
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      /* Custom scrollbar matching original */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: var(--bg-card); }
+      ::-webkit-scrollbar-thumb { background: var(--brand-primary); border-radius: 4px; }
+
+      /* CORREÇÃO DO ÍCONE DO CALENDÁRIO PARA BRANCO */
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+        cursor: pointer;
+        opacity: 0.8;
+        transition: 0.2s;
+      }
+      input[type="date"]::-webkit-calendar-picker-indicator:hover {
+        opacity: 1;
+      }
