@@ -90,7 +90,7 @@ export const CONFIG = {
    * URL pública do app, usada nos QR Codes. Vazio = detecta automaticamente
    * a partir do endereço atual.
    */
-  APP_URL: '',
+  APP_URL: 'otamerica-sentinel.vercel.app',
 
   /**
    * Recursos que dependem de suporte no backend. Deixe `false` enquanto o
