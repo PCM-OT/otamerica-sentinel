@@ -2,10 +2,10 @@
  * SENTINEL — Cadastro de equipamento e caixa de sugestões.
  */
 
-import { checkFileSize, createEquipment, readFileAsBase64, sendSuggestion } from '../actions.js';
-import { FORM_CONFIG, periodicityFor } from '../config.js';
+import { checkFileSize, createEquipment, readFileAsBase64, sendSuggestion, sheetDate } from '../actions.js';
+import { CATEGORIES, CONFIG, FIELD, FORM_CONFIG, periodicityFor } from '../config.js';
 import { getByTag } from '../store.js';
-import { addMonths, confirmDialog, el, formatBR, parseDate, toInputDate, toast } from '../utils.js';
+import { addMonths, confirmDialog, el, esc, formatBR, parseDate, toInputDate, toast } from '../utils.js';
 
 export function renderDynamicForm() {
   const cat = el('reg-cat').value;
@@ -62,7 +62,7 @@ export function renderDynamicForm() {
   });
 
   // Periodicidade começa com o padrão da categoria, editável por equipamento.
-  const periodInput = el('input_periodicidade');
+  const periodInput = el(`input_${FIELD.periodicity}`);
   if (periodInput) {
     periodInput.value = periodicityFor(cat);
     periodInput.min = '1';
@@ -75,10 +75,10 @@ export function renderDynamicForm() {
  * ------------------------------------------------------------------ */
 
 function refreshCalculatedValidity() {
-  const certInput = el('input_cert_date');
-  const periodInput = el('input_periodicidade');
-  const dateInput = el('input_date');
-  const hint = el('hint_date');
+  const certInput = el(`input_${FIELD.certified}`);
+  const periodInput = el(`input_${FIELD.periodicity}`);
+  const dateInput = el(`input_${FIELD.validity}`);
+  const hint = el(`hint_${FIELD.validity}`);
   if (!certInput || !periodInput || !dateInput) return;
 
   const next = addMonths(parseDate(certInput.value), Number(periodInput.value));
@@ -103,17 +103,17 @@ function refreshCalculatedValidity() {
 }
 
 function bindValidityCalculation() {
-  const dateInput = el('input_date');
-  if (dateInput && !el('hint_date')) {
+  const dateInput = el(`input_${FIELD.validity}`);
+  if (dateInput && !el(`hint_${FIELD.validity}`)) {
     const hint = document.createElement('small');
     hint.className = 'field-hint';
-    hint.id = 'hint_date';
+    hint.id = `hint_${FIELD.validity}`;
     hint.hidden = true;
     dateInput.parentElement.appendChild(hint);
   }
 
-  el('input_cert_date')?.addEventListener('change', refreshCalculatedValidity);
-  el('input_periodicidade')?.addEventListener('input', refreshCalculatedValidity);
+  el(`input_${FIELD.certified}`)?.addEventListener('change', refreshCalculatedValidity);
+  el(`input_${FIELD.periodicity}`)?.addEventListener('input', refreshCalculatedValidity);
   dateInput?.addEventListener('input', () => {
     dateInput.dataset.touched = 'true';
     refreshCalculatedValidity();
@@ -132,14 +132,14 @@ function validate(cat, values) {
   const errors = [];
   if (!values.tag) errors.push('A TAG é obrigatória.');
 
-  const validity = parseDate(values.date);
-  const certified = parseDate(values.cert_date);
-  if (values.date && !validity) errors.push('Data de validade inválida.');
-  if (values.cert_date && !certified) errors.push('Data de certificação inválida.');
+  const validity = parseDate(values[FIELD.validity]);
+  const certified = parseDate(values[FIELD.certified]);
+  if (values[FIELD.validity] && !validity) errors.push('Data de validade inválida.');
+  if (values[FIELD.certified] && !certified) errors.push('Data de certificação inválida.');
   if (validity && certified && validity < certified) {
     errors.push('A validade não pode ser anterior à data de certificação.');
   }
-  if (values.periodicidade && Number(values.periodicidade) <= 0) {
+  if (values[FIELD.periodicity] && Number(values[FIELD.periodicity]) <= 0) {
     errors.push('A periodicidade deve ser maior que zero.');
   }
   return errors;
@@ -171,7 +171,7 @@ async function handleSave() {
     if (!proceed) return;
   }
 
-  if (values.result && values.result.toUpperCase() === 'REPROVADO') {
+  if (values[FIELD.result] && values[FIELD.result].toUpperCase() === 'REPROVADO') {
     const proceed = await confirmDialog({
       title: 'Certificado reprovado',
       message:
@@ -183,28 +183,22 @@ async function handleSave() {
     if (!proceed) return;
   }
 
-  const fd = new FormData();
-  fd.append('action', 'create');
-  fd.append('cat', cat);
+  // O backend recebe um objeto `data` com os mesmos nomes de campo do
+  // formulário — por isso os ids do FORM_CONFIG são os nomes do backend.
+  const data = {};
   FORM_CONFIG[cat].forEach((f) => {
     const raw = values[f.id];
-    if (f.type === 'date') {
-      // O <input type="date"> devolve "aaaa-mm-dd"; convertemos direto para
-      // dd/mm/aaaa sem passar por new Date(iso), que desloca o dia no fuso.
-      fd.append(f.id, raw ? formatBR(parseDate(raw)) : '');
-    } else {
-      fd.append(f.id, raw);
-    }
+    data[f.id] = f.type === 'date' && raw ? sheetDate(parseDate(raw)) : raw;
   });
 
   const fileInput = el('reg-file');
-  const file = fileInput?.files?.[0];
+  const file = CONFIG.FEATURES.attachments ? fileInput?.files?.[0] : null;
   if (file) {
     try {
       checkFileSize(file);
-      fd.append('fileData', await readFileAsBase64(file));
-      fd.append('fileName', file.name);
-      fd.append('mimeType', file.type);
+      data.fileData = await readFileAsBase64(file);
+      data.fileName = file.name;
+      data.mimeType = file.type;
     } catch (error) {
       toast(error.message, 'error', 8000);
       return;
@@ -212,7 +206,7 @@ async function handleSave() {
   }
 
   button.disabled = true;
-  const saved = await createEquipment(fd, values.tag);
+  const saved = await createEquipment(cat, data);
   button.disabled = false;
   if (!saved) return;
 
@@ -236,7 +230,7 @@ async function handleSuggestion() {
     toast('Descreva a sugestão antes de enviar.', 'warn');
     return;
   }
-  const sent = await sendSuggestion(type, name ? `[${name}] ${msg}` : msg);
+  const sent = await sendSuggestion(name, type, msg);
   if (sent) {
     el('sug-msg').value = '';
     el('sug-name').value = '';
@@ -244,7 +238,19 @@ async function handleSuggestion() {
 }
 
 export function bindRegister() {
-  el('reg-cat')?.addEventListener('change', renderDynamicForm);
+  // As opções vêm de CATEGORIES para não divergirem dos nomes das abas.
+  const select = el('reg-cat');
+  if (select) {
+    select.innerHTML = CATEGORIES.map(
+      (c) => `<option value="${esc(c.value)}">${esc(c.label)}</option>`,
+    ).join('');
+  }
+
+  // O campo de anexo só aparece quando o backend sabe guardar o arquivo.
+  const fileBlock = el('reg-file-block');
+  if (fileBlock) fileBlock.hidden = !CONFIG.FEATURES.attachments;
+
+  select?.addEventListener('change', renderDynamicForm);
   el('btn-save-cloud')?.addEventListener('click', handleSave);
   el('btn-send-suggestion')?.addEventListener('click', handleSuggestion);
   renderDynamicForm();

@@ -27,7 +27,7 @@ function record(overrides) {
     tag: 'T-1',
     equip: 'Equipamento',
     local: 'Oficina',
-    cat: 'NR10',
+    cat: 'NR-10',
     model: '',
     fab: '',
     certNum: '',
@@ -70,8 +70,8 @@ describe('recalcStatus', () => {
   it('respeita o limite de dias configurado por categoria', () => {
     // NR10 alerta com 40 dias; manômetro, com 30.
     seed([
-      record({ tag: 'A', cat: 'NR10', validUntil: inDays(35) }),
-      record({ tag: 'B', cat: 'MANOMETRO', validUntil: inDays(35) }),
+      record({ tag: 'A', cat: 'NR-10', validUntil: inDays(35) }),
+      record({ tag: 'B', cat: 'MANÔMETROS', validUntil: inDays(35) }),
     ]);
     assert.equal(state.records[0].health, 'warn');
     assert.equal(state.records[1].health, 'ok');
@@ -115,9 +115,9 @@ describe('counts', () => {
 describe('filterItems', () => {
   beforeEach(() => {
     seed([
-      record({ tag: 'ALICA-01', equip: 'Alicate isolado', cat: 'NR10', local: 'Oficina', validUntil: inDays(90) }),
-      record({ tag: 'MAN-001', equip: 'Manômetro', cat: 'MANOMETRO', local: 'Campo', validUntil: inDays(-2) }),
-      record({ tag: 'OUT-9', equip: 'Torquímetro', cat: 'OUTROS', local: 'Campo', validUntil: null, activeState: 'Inativo' }),
+      record({ tag: 'ALICA-01', equip: 'Alicate isolado', cat: 'NR-10', local: 'Oficina', validUntil: inDays(90) }),
+      record({ tag: 'MAN-001', equip: 'Manômetro', cat: 'MANÔMETROS', local: 'Campo', validUntil: inDays(-2) }),
+      record({ tag: 'OUT-9', equip: 'Torquímetro', cat: 'DEMAIS EQUIPAMENTOS', local: 'Campo', validUntil: null, activeState: 'Inativo' }),
     ]);
   });
 
@@ -128,7 +128,7 @@ describe('filterItems', () => {
 
   it('filtra por status, categoria e local', () => {
     assert.equal(filterItems({ status: new Set(['danger']), search: '' }).length, 1);
-    assert.equal(filterItems({ status: new Set(['all']), cat: new Set(['NR10']), search: '' }).length, 1);
+    assert.equal(filterItems({ status: new Set(['all']), cat: new Set(['NR-10']), search: '' }).length, 1);
     assert.equal(filterItems({ status: new Set(['all']), local: 'Campo', search: '' }).length, 1);
   });
 

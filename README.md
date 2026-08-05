@@ -40,7 +40,7 @@ assets/js/
   main.js                   Rotas, eventos e tarefas periódicas
   views/                    dashboard, tables, modal, charts, register, admin, audit
 tests/                      Testes automatizados (node:test, sem dependências)
-backend/Code.gs.example     Apps Script: esquema, token, auditoria e alertas
+backend/Code.gs             Apps Script (substitui o Code.gs atual)
 ```
 
 ---
@@ -137,38 +137,81 @@ Passos recomendados, em ordem:
    ("Executar como: usuário que acessa" + "Quem pode acessar: usuários de
    <sua organização>"), ou migre para um backend com login.
 
+## Contrato com o backend
+
+O Apps Script (Sentinel Nexus) não é um CRUD comum. Três características
+definem tudo o que o app faz:
+
+| | |
+|---|---|
+| **Histórico imutável** | Cada certificado é uma LINHA NOVA. Nada é sobrescrito. Renovar a validade é criar uma nova versão do registro. |
+| **Categoria = nome da aba** | `NR-10`, `MANÔMETROS`, `DEMAIS EQUIPAMENTOS` — com hífen e acento. É o que viaja no campo `category`. |
+| **Colunas posicionais** | O backend lê por índice, não por título. Por isso campos novos só podem entrar no FIM da aba. |
+
+O protocolo, em resumo:
+
+```
+GET  ?action=read              → { success: true, data: [...] }
+GET  ?action=history&tag=X     → { success: true, history: [...] }
+GET  ?action=read_suggestions  → { success: true, data: [...] }
+POST corpo JSON  { action: 'create'|'delete'|'suggestion', ... }
+```
+
+Duas armadilhas que o app precisa respeitar:
+
+- **`GET` sem `action` devolve a página HTML**, não dados. Toda leitura manda
+  `action=read`.
+- **O POST é lido de `e.postData.contents`**: precisa ser uma string JSON.
+  Enviar `FormData` faz o `JSON.parse` do servidor falhar.
+
+E uma consequência importante: `action=read` traz **apenas a versão vigente**
+de cada equipamento. O histórico é uma consulta à parte (`action=history`) —
+filtrar localmente devolveria uma linha só.
+
 ## Backend: instalar em 5 minutos
 
-`backend/Code.gs.example` é o script completo — cole por cima do que estiver no
-editor do Apps Script (Planilha → Extensões → Apps Script).
+`backend/Code.gs` substitui o Code.gs atual, **mantendo o mesmo contrato**.
 
-1. Preencha o bloco `CONFIG` no topo: `SHEET_ID`, `TOKEN`, `DIGEST_TO` e `APP_URL`.
-2. Selecione a função **`setup`** na lista do editor e clique em **Executar**.
-   Autorize quando o Google pedir. O log mostra o que foi feito.
-3. **Implantar → Nova implantação → App da Web**
+1. Planilha → Extensões → Apps Script. Cole o arquivo por cima do atual.
+2. Preencha `CONFIG`: `TOKEN`, `APP_URL` e `DIGEST_TO` (o `SHEET_ID` já vem
+   preenchido).
+3. Selecione a função **`setup`** e clique em **Executar**. Autorize quando o
+   Google pedir. O log diz o que foi feito.
+4. **Implantar → Nova implantação → App da Web**
    (Executar como: *Eu*; Quem pode acessar: *Qualquer pessoa*).
-4. Copie a URL `/exec` para `assets/js/config.js` → `API_URL`, e repita o mesmo
-   token em `API_TOKEN`.
+5. Copie a URL `/exec` para `assets/js/config.js` → `API_URL` e repita o token
+   em `API_TOKEN`. Depois ligue `FEATURES.attachments` (a coluna LINK passa a
+   existir).
 
 ### As colunas se criam sozinhas
 
-Não é preciso preparar a planilha à mão. O `setup` cria as abas que faltarem
-(`NR10`, `MANOMETRO`, `OUTROS`, `AUDITORIA`, `USUARIOS`, `SUGESTOES`) e
-acrescenta as colunas ausentes — inclusive as de metrologia da Fase 2.
+O `setup` cria as abas que faltarem e acrescenta as colunas ausentes
+(`LABORATÓRIO`, `INCERTEZA DE MEDIÇÃO`, `ERRO MÁXIMO ADMISSÍVEL`,
+`PERIODICIDADE (MESES)`, `LINK`), além de `AUDITORIA` e `SUGESTÕES`.
 
-Duas garantias importantes:
+Como o mapeamento é posicional, `ensureColumns` **só escreve a partir da
+primeira coluna vazia**: os títulos e os dados existentes não são tocados, nem
+mesmo reescritos. Rodar `setup` de novo não duplica nada.
 
-- **Nada é apagado nem reordenado.** Colunas novas entram no fim, então uma
-  planilha antiga continua válida e os dados existentes ficam onde estão.
-- **É idempotente e contínuo.** Rodar `setup` de novo não duplica nada, e toda
-  escrita passa por `sheetFor()`, que reconfere o esquema. Se alguém apagar uma
-  coluna sem querer, ela volta no próximo cadastro em vez de derrubar a operação.
+Para acrescentar um campo no futuro: ponha o cabeçalho no fim de `headers`, o
+nome em `fields` com o índice correspondente, e o campo em `FORM_CONFIG`
+(`assets/js/config.js`). `npm test` falha se as duas pontas saírem de
+sincronia — um campo sem coluna seria descartado em silêncio.
 
-Para acrescentar um campo novo no futuro: adicione o par
-`['campo', 'CABEÇALHO']` em `FIELDS` (backend) e o campo em `FORM_CONFIG`
-(`assets/js/config.js`), e rode `setup`. `npm test` avisa se as duas pontas
-saírem de sincronia — um campo sem coluna correspondente seria descartado em
-silêncio pelo backend.
+### O que este backend corrige do V33
+
+| Problema | Efeito |
+|---|---|
+| `new Date('10/03/2025')` | Data em texto dd/mm virava **3 de outubro** (o motor lê mm/dd) |
+| `formatDateToISO` no fuso do script | Data saía **um dia atrás** se o fuso do script ≠ o da planilha |
+| `DIAMETRO_CONEXAO` em DEMAIS EQUIPAMENTOS | Coluna inexistente no mapa: **INFORMAÇÕES nunca era gravado nem lido** |
+| `rowTag === tag \|\| rowItem === tag` | Uma TAG igual ao ITEM de outro equipamento **excluía o registro errado** |
+| `getNextItemId` + `appendRow` sem trava | Dois cadastros simultâneos pegavam **o mesmo ITEM** |
+| Última linha da planilha por item | Inserir um certificado antigo depois fazia o painel **mostrar o vencido como vigente** |
+| `getSuggestionsList` com 5 colunas fixas | Quebrava se a aba tivesse menos |
+
+Também acrescenta token, trava nas escritas, trilha de auditoria, `action=audit`,
+anexo no Drive e o resumo de vencimentos por e-mail.
 
 ## Alertas por e-mail (item 3)
 
@@ -212,15 +255,18 @@ ID token em cada escrita. Só vira segurança de verdade quando o Apps Script
 valida esse token (`verifyIdToken` no exemplo de backend) — o front decodifica
 o JWT apenas para exibir nome e e-mail.
 
-Papéis (aba `USUARIOS` no backend, colunas `EMAIL | PAPEL`):
+Papéis definidos em `AUTH.DEFAULT_ROLE`:
 
 | Papel | Pode |
 |---|---|
 | `leitor` | apenas consultar |
-| `editor` | cadastrar, atualizar validade, inativar |
-| `admin` | tudo, inclusive substituir bases por CSV |
+| `editor` | cadastrar, renovar validade, inativar |
+| `admin` | tudo |
 
-A checagem no cliente serve para a interface; a que vale é a do backend.
+A checagem no cliente serve para a interface; a que vale é a do backend. Neste
+backend o autor de cada alteração vai para a aba `AUDITORIA` — com o e-mail da
+sessão quando a implantação roda como "usuário que acessa", ou com o nome
+declarado, marcado como não verificado.
 
 A tela **Auditoria** lê o log do servidor (`action=audit`) e mostra quando,
 o quê, em qual TAG e por quem. Enquanto o Apps Script não expuser esse
@@ -244,10 +290,13 @@ mesmo dentro do prazo, com aviso na ficha e coluna própria no Excel. Desligue
 em `CONFIG.BLOCK_ON_REJECTED` se a sua operação tratar reprovação apenas como
 histórico.
 
-> ⚠️ Os campos novos só são gravados se a planilha tiver as colunas
-> correspondentes (`PERIODICIDADE (MESES)`, `LABORATÓRIO / ORGANISMO
-> CALIBRADOR`, `RESULTADO`, `INCERTEZA DE MEDIÇÃO`, `ERRO MÁXIMO ADMISSÍVEL`).
-> Sem elas, o backend descarta o valor silenciosamente.
+> ⚠️ Enquanto o `backend/Code.gs` não for publicado, os campos de metrologia
+> não têm coluna na planilha e chegam vazios — a ficha simplesmente não mostra
+> essas linhas. Nada quebra, mas nada é gravado.
+
+**Renovar em massa cria uma nova versão**, não altera a linha existente: é o
+único caminho compatível com o histórico imutável, e também o correto para
+conformidade — a validade anterior continua registrada.
 
 ## Uso offline (PWA)
 

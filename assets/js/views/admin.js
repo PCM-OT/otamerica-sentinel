@@ -7,7 +7,7 @@
  */
 
 import { importCsv, readFileAsText } from '../actions.js';
-import { CONFIG } from '../config.js';
+import { CATEGORIES, CONFIG } from '../config.js';
 import { confirmDialog, el, promptDialog, toast } from '../utils.js';
 
 let brandClicks = 0;
@@ -123,6 +123,16 @@ async function unlockAdmin() {
 }
 
 export function bindAdmin() {
+  // A importação de CSV depende de suporte no backend; sem ele, o bloco nem
+  // aparece, em vez de oferecer um botão que falha.
+  const csvBlock = el('adm-csv-block');
+  if (csvBlock) csvBlock.hidden = !CONFIG.FEATURES.csvImport;
+
+  const catSelect = el('adm-cat-select');
+  if (catSelect) {
+    catSelect.innerHTML = CATEGORIES.map((c) => `<option value="${c.value}">Base ${c.short}</option>`).join('');
+  }
+
   el('brand-container')?.addEventListener('click', () => {
     brandClicks += 1;
     clearTimeout(clickTimer);

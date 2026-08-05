@@ -5,7 +5,7 @@
 import { deleteItems } from '../actions.js';
 import { appBaseUrl } from '../config.js';
 import { statusLabel } from '../status.js';
-import { getByTag, historyFor, isRejected, periodicityOf } from '../store.js';
+import { getByTag, isRejected, loadHistoryFor, periodicityOf } from '../store.js';
 import { dateKey, el, esc, promptDialog, qrDataUrl, toast } from '../utils.js';
 import { downloadItemPdf } from '../exporters.js';
 
@@ -55,17 +55,29 @@ function renderDetails(item) {
     .join('');
 }
 
-function renderHistory(item) {
+async function renderHistory(item) {
   const tbody = el('m-history-list');
   if (!tbody) return;
 
-  const rows = historyFor(item.tag);
+  tbody.innerHTML = '<tr><td colspan="3" class="table-empty">Carregando histórico...</td></tr>';
+
+  // A carga do painel traz só a versão vigente de cada equipamento: o
+  // histórico é uma consulta própria ao backend.
+  const { history: rows, complete, reason } = await loadHistoryFor(item.tag);
+
+  // A ficha pode ter mudado enquanto a consulta ia e voltava.
+  if (currentTag !== item.tag) return;
+
   const currentKey = dateKey(item.validUntil);
 
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="3" class="table-empty">Sem histórico registrado.</td></tr>';
     return;
   }
+
+  const notice = complete
+    ? ''
+    : `<tr><td colspan="3" class="table-empty">Mostrando apenas a versão vigente. ${esc(reason || '')}</td></tr>`;
 
   tbody.innerHTML = rows
     .map((h) => {
@@ -86,7 +98,7 @@ function renderHistory(item) {
         `</tr>`
       );
     })
-    .join('');
+    .join('') + notice;
 }
 
 function renderQr(item) {

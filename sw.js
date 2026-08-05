@@ -18,7 +18,7 @@
  * Ao mudar qualquer arquivo do app, incremente VERSION.
  */
 
-const VERSION = 'v2aa4ac5b71fa';
+const VERSION = 've0ce74b4076f';
 const SHELL_CACHE = `sentinel-shell-${VERSION}`;
 const RUNTIME_CACHE = `sentinel-runtime-${VERSION}`;
 const DATA_CACHE = `sentinel-data-${VERSION}`;

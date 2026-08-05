@@ -5,6 +5,7 @@
  * A seleção é sempre por TAG (ver comentário em store.js).
  */
 
+import { CATEGORIES } from '../config.js';
 import { statusColor, statusLabel } from '../status.js';
 import { filterItems, sortItems, state } from '../store.js';
 import { el, esc } from '../utils.js';
@@ -60,6 +61,28 @@ export function visibleItems(name) {
     filterItems({ status: f.status, cat: f.cat, local: f.local, search: f.search }),
     f.sort,
   );
+}
+
+/**
+ * Botões de categoria montados a partir de CATEGORIES: os valores precisam ser
+ * exatamente os nomes das abas usados pelo backend, e deixá-los no HTML era
+ * convite para divergirem.
+ */
+export function renderCategoryButtons() {
+  Object.keys(TABLES).forEach((name) => {
+    const host = el(`${name}-cat-buttons`);
+    if (!host) return;
+    const selected = TABLES[name].filters().cat;
+
+    host.innerHTML = [{ value: 'all', short: 'TODOS' }, ...CATEGORIES]
+      .map(
+        (c) =>
+          `<button type="button" class="btn-cat${selected.has(c.value) ? ' active' : ''}" ` +
+          `data-filter-table="${name}" data-filter-kind="cat" data-filter-value="${esc(c.value)}" ` +
+          `aria-pressed="${selected.has(c.value)}">${esc(c.short || c.value)}</button>`,
+      )
+      .join('');
+  });
 }
 
 export function renderLocalOptions() {

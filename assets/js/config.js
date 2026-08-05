@@ -31,20 +31,24 @@ export const CONFIG = {
    */
   WRITE_MODE: 'no-cors',
 
-  /** Dias de antecedência para o status "ATENÇÃO", por categoria. */
+  /**
+   * Dias de antecedência para o status "ATENÇÃO", por categoria.
+   * As chaves são os nomes das ABAS da planilha, que é o que o backend usa
+   * como categoria.
+   */
   WARN_DAYS: {
     default: 40,
-    NR10: 40,
-    MANOMETRO: 30,
-    OUTROS: 40,
+    'NR-10': 40,
+    'MANÔMETROS': 30,
+    'DEMAIS EQUIPAMENTOS': 40,
   },
 
   /** Periodicidade padrão de calibração, em meses, por categoria. */
   PERIODICITY_MONTHS: {
     default: 12,
-    NR10: 6,
-    MANOMETRO: 12,
-    OUTROS: 12,
+    'NR-10': 6,
+    'MANÔMETROS': 12,
+    'DEMAIS EQUIPAMENTOS': 12,
   },
 
   /**
@@ -88,6 +92,18 @@ export const CONFIG = {
    */
   APP_URL: '',
 
+  /**
+   * Recursos que dependem de suporte no backend. Deixe `false` enquanto o
+   * Apps Script não tiver a parte correspondente: é melhor esconder o botão
+   * do que oferecer algo que falha em silêncio.
+   */
+  FEATURES: {
+    /** Anexar certificado ao cadastro (exige coluna LINK + upload no Drive). */
+    attachments: false,
+    /** Substituir base por CSV (não existe no modelo de histórico imutável). */
+    csvImport: false,
+  },
+
   /** Quantos cards o painel renderiza por vez. */
   PAGE_SIZE: 60,
 
@@ -122,11 +138,27 @@ export const ROLE_PERMISSIONS = {
 
 export const RESULT_OPTIONS = ['APROVADO', 'APROVADO COM RESTRIÇÃO', 'REPROVADO'];
 
+/**
+ * Categorias = abas da planilha. Os nomes precisam bater exatamente com
+ * SHEET_CONFIG no Apps Script, incluindo hífen e acentos.
+ */
 export const CATEGORIES = [
-  { value: 'NR10', label: 'NR-10 / Elétrica', short: 'NR10' },
-  { value: 'MANOMETRO', label: 'Manômetro', short: 'MANÔMETROS' },
-  { value: 'OUTROS', label: 'Demais Equipamentos', short: 'OUTROS' },
+  { value: 'NR-10', label: 'NR-10 / Elétrica', short: 'NR-10' },
+  { value: 'MANÔMETROS', label: 'Manômetro', short: 'MANÔMETROS' },
+  { value: 'DEMAIS EQUIPAMENTOS', label: 'Demais Equipamentos', short: 'DEMAIS' },
 ];
+
+/**
+ * Nomes dos campos usados pelo backend (chaves de `data` no POST) que o app
+ * precisa referenciar diretamente.
+ */
+export const FIELD = {
+  tag: 'tag',
+  certified: 'dataCertificacao',
+  validity: 'dataValidade',
+  periodicity: 'periodicidade',
+  result: 'resultado',
+};
 
 export const STATUSES = [
   { value: 'ok', label: 'VÁLIDO', color: 'var(--st-ok)' },
@@ -136,61 +168,63 @@ export const STATUSES = [
 ];
 
 export const FORM_CONFIG = {
-  NR10: [
+  'NR-10': [
     { id: 'tag', label: 'IDENTIFICAÇÃO (TAG)', type: 'text', placeholder: 'Ex: ALICA-01', required: true },
-    { id: 'equip', label: 'EQUIPAMENTO', type: 'text', placeholder: 'Ex: Alicate Isolado' },
-    { id: 'model', label: 'ESPECIFICAÇÃO/MODELO', type: 'text' },
-    { id: 'fab', label: 'FABRICANTE', type: 'text' },
+    { id: 'tagAnterior', label: 'TAG ANTERIOR', type: 'text', hint: 'Preencha quando o equipamento for reidentificado.' },
+    { id: 'equipamento', label: 'EQUIPAMENTO', type: 'text', placeholder: 'Ex: Alicate Isolado' },
+    { id: 'especificacao', label: 'ESPECIFICAÇÃO', type: 'text' },
+    { id: 'fabricante', label: 'FABRICANTE', type: 'text' },
     { id: 'dimensoes', label: 'DIMENSÕES', type: 'text' },
-    { id: 'id_malao', label: 'ID MALÃO', type: 'text' },
-    { id: 'ordem_envio', label: 'ORDEM DE ENVIO', type: 'text' },
+    { id: 'idMalao', label: 'ID MALÃO', type: 'text' },
+    { id: 'ordemEnvio', label: 'ORDEM DE ENVIO', type: 'text' },
     { id: 'lab', label: 'LABORATÓRIO / ORGANISMO CALIBRADOR', type: 'text', placeholder: 'Ex: RBC 0123' },
-    { id: 'result', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
+    { id: 'resultado', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
     { id: 'incerteza', label: 'INCERTEZA DE MEDIÇÃO', type: 'text', placeholder: 'Ex: ± 0,05 bar (k=2)' },
     { id: 'ema', label: 'ERRO MÁXIMO ADMISSÍVEL', type: 'text', placeholder: 'Ex: ± 1% do fundo de escala' },
-    { id: 'cert_date', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
+    { id: 'dataCertificacao', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
     { id: 'periodicidade', label: 'PERIODICIDADE (MESES)', type: 'number', hint: 'Usada para calcular a validade automaticamente.' },
-    { id: 'date', label: 'DATA DE VALIDADE', type: 'date' },
-    { id: 'cert_num', label: 'Nº DO CERTIFICADO', type: 'text' },
+    { id: 'dataValidade', label: 'DATA DE VALIDADE', type: 'date' },
+    { id: 'numCertificado', label: 'Nº DO CERTIFICADO', type: 'text' },
   ],
-  MANOMETRO: [
+  'MANÔMETROS': [
     { id: 'tag', label: 'TAG', type: 'text', placeholder: 'Ex: MAN-001', required: true },
-    { id: 'n_serie', label: 'Nº SÉRIE', type: 'text' },
-    { id: 'model', label: 'MODELO', type: 'text' },
-    { id: 'fab', label: 'FABRICANTE', type: 'text' },
+    { id: 'tagAnterior', label: 'TAG ANTERIOR', type: 'text' },
+    { id: 'numSerie', label: 'Nº SÉRIE', type: 'text' },
+    { id: 'modelo', label: 'MODELO', type: 'text' },
+    { id: 'fabricante', label: 'FABRICANTE', type: 'text' },
     { id: 'fluido', label: 'FLUIDO', type: 'text' },
-    { id: 'faixa', label: 'FAIXA DE INDICAÇÃO', type: 'text' },
-    { id: 'glicerina', label: 'GLICERINA', type: 'select', options: ['SIM', 'NÃO'] },
-    { id: 'pos_conexao', label: 'POSIÇÃO DA CONEXÃO', type: 'text' },
-    { id: 'tipo_conexao', label: 'TIPO DE CONEXÃO', type: 'text', placeholder: 'Ex: BSP, NPT' },
-    { id: 'diam_conexao', label: 'DIÂMETRO DA CONEXÃO', type: 'text', placeholder: 'Ex: 1/4"' },
-    { id: 'mat_conexao', label: 'MATERIAL DA CONEXÃO', type: 'text' },
-    { id: 'diam_caixa', label: 'DIÂMETRO DA CAIXA', type: 'text' },
-    { id: 'mat_caixa', label: 'MATERIAL DA CAIXA', type: 'text' },
-    { id: 'equip_assoc', label: 'EQUIP. ASSOCIADO', type: 'text' },
-    { id: 'local', label: 'LOCALIZAÇÃO', type: 'text' },
+    { id: 'faixaIndicacao', label: 'FAIXA DE INDICAÇÃO', type: 'text' },
+    { id: 'glicerina', label: 'GLICERINA', type: 'select', options: ['SIM', 'NÃO'], blank: true },
+    { id: 'posicaoConexao', label: 'POSIÇÃO DA CONEXÃO', type: 'text' },
+    { id: 'tipoConexao', label: 'TIPO DE CONEXÃO', type: 'text', placeholder: 'Ex: BSP, NPT' },
+    { id: 'diametroConexao', label: 'DIÂMETRO DA CONEXÃO', type: 'text', placeholder: 'Ex: 1/4"' },
+    { id: 'materialConexao', label: 'MATERIAL DA CONEXÃO', type: 'text' },
+    { id: 'diametroCaixa', label: 'DIÂMETRO DA CAIXA', type: 'text' },
+    { id: 'materialCaixa', label: 'MATERIAL DA CAIXA', type: 'text' },
+    { id: 'equipAssociado', label: 'EQUIP. ASSOCIADO', type: 'text' },
+    { id: 'localizacao', label: 'LOCALIZAÇÃO', type: 'text' },
     { id: 'lab', label: 'LABORATÓRIO / ORGANISMO CALIBRADOR', type: 'text', placeholder: 'Ex: RBC 0123' },
-    { id: 'result', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
+    { id: 'resultado', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
     { id: 'incerteza', label: 'INCERTEZA DE MEDIÇÃO', type: 'text', placeholder: 'Ex: ± 0,05 bar (k=2)' },
     { id: 'ema', label: 'ERRO MÁXIMO ADMISSÍVEL', type: 'text', placeholder: 'Ex: ± 1% do fundo de escala' },
-    { id: 'cert_date', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
+    { id: 'dataCertificacao', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
     { id: 'periodicidade', label: 'PERIODICIDADE (MESES)', type: 'number', hint: 'Usada para calcular a validade automaticamente.' },
-    { id: 'date', label: 'DATA DE VALIDADE', type: 'date' },
-    { id: 'cert_num', label: 'Nº DO CERTIFICADO', type: 'text' },
+    { id: 'dataValidade', label: 'DATA DE VALIDADE', type: 'date' },
+    { id: 'numCertificado', label: 'Nº DO CERTIFICADO', type: 'text' },
   ],
-  OUTROS: [
+  'DEMAIS EQUIPAMENTOS': [
     { id: 'tag', label: 'TAG', type: 'text', required: true },
-    { id: 'equip', label: 'EQUIPAMENTO', type: 'text' },
-    { id: 'model', label: 'MODELO', type: 'text' },
-    { id: 'diam_conexao', label: 'DIÂMETRO DA CONEXÃO', type: 'text' },
-    { id: 'local', label: 'LOCALIZAÇÃO', type: 'text' },
+    { id: 'tagAnterior', label: 'TAG ANTERIOR', type: 'text' },
+    { id: 'modelo', label: 'MODELO', type: 'text' },
+    { id: 'informacoes', label: 'INFORMAÇÕES', type: 'text' },
+    { id: 'localizacao', label: 'LOCALIZAÇÃO', type: 'text' },
     { id: 'lab', label: 'LABORATÓRIO / ORGANISMO CALIBRADOR', type: 'text', placeholder: 'Ex: RBC 0123' },
-    { id: 'result', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
+    { id: 'resultado', label: 'RESULTADO', type: 'select', options: RESULT_OPTIONS, blank: true },
     { id: 'incerteza', label: 'INCERTEZA DE MEDIÇÃO', type: 'text', placeholder: 'Ex: ± 0,05 bar (k=2)' },
     { id: 'ema', label: 'ERRO MÁXIMO ADMISSÍVEL', type: 'text', placeholder: 'Ex: ± 1% do fundo de escala' },
-    { id: 'cert_date', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
+    { id: 'dataCertificacao', label: 'DATA DE CERTIFICAÇÃO', type: 'date' },
     { id: 'periodicidade', label: 'PERIODICIDADE (MESES)', type: 'number', hint: 'Usada para calcular a validade automaticamente.' },
-    { id: 'date', label: 'DATA DE VALIDADE', type: 'date' },
-    { id: 'cert_num', label: 'Nº DO CERTIFICADO', type: 'text' },
+    { id: 'dataValidade', label: 'DATA DE VALIDADE', type: 'date' },
+    { id: 'numCertificado', label: 'Nº DO CERTIFICADO', type: 'text' },
   ],
 };

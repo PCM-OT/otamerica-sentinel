@@ -16,36 +16,44 @@ import { describe, it } from 'node:test';
 import { FORM_CONFIG } from '../assets/js/config.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const backend = readFileSync(join(ROOT, 'backend/Code.gs.example'), 'utf8');
+const backend = readFileSync(join(ROOT, 'backend/Code.gs'), 'utf8');
 
-/** Lê o mapa FIELDS do Apps Script: { categoria: { campo: 'CABEÇALHO' } }. */
-function backendFields() {
-  const block = backend.match(/const FIELDS = \{([\s\S]*?)\n\};/);
-  assert.ok(block, 'FIELDS não encontrado no backend');
-
+/**
+ * Lê o SHEET_SCHEMA do Apps Script:
+ * { categoria: { headers: [...], fields: { campo: índice } } }
+ */
+function backendSchema() {
   const out = {};
-  const categories = [...block[1].matchAll(/^ {2}(\w+): \[([\s\S]*?)^ {2}\],$/gm)];
-  categories.forEach(([, cat, body]) => {
-    out[cat] = {};
-    [...body.matchAll(/\['([^']+)', '([^']+)'\]/g)].forEach(([, field, header]) => {
-      out[cat][field] = header;
-    });
+  const blocks = [...backend.matchAll(/^ {2}'([^']+)': \{\n([\s\S]*?)^ {2}\},$/gm)];
+  assert.ok(blocks.length, 'SHEET_SCHEMA não encontrado no backend');
+
+  blocks.forEach(([, cat, body]) => {
+    const headers = body.match(/headers: \[([\s\S]*?)\],\n/);
+    const fields = body.match(/fields: \{([\s\S]*?)\},\n/);
+    if (!headers || !fields) return;
+
+    out[cat] = {
+      headers: [...headers[1].matchAll(/'([^']+)'/g)].map((m) => m[1]),
+      fields: Object.fromEntries(
+        [...fields[1].matchAll(/(\w+): (\d+)/g)].map(([, name, index]) => [name, Number(index)]),
+      ),
+    };
   });
   return out;
 }
 
-const fields = backendFields();
+const schema = backendSchema();
 
 describe('esquema do backend', () => {
-  it('cobre as três categorias', () => {
-    assert.deepEqual(Object.keys(fields).sort(), ['MANOMETRO', 'NR10', 'OUTROS']);
+  it('usa exatamente os nomes de aba que o app envia como categoria', () => {
+    assert.deepEqual(Object.keys(schema).sort(), Object.keys(FORM_CONFIG).sort());
   });
 
   it('tem coluna para todo campo do formulário', () => {
     Object.entries(FORM_CONFIG).forEach(([cat, formFields]) => {
       formFields.forEach((f) => {
         assert.ok(
-          fields[cat][f.id],
+          schema[cat].fields[f.id] !== undefined,
           `campo "${f.id}" existe no formulário de ${cat} mas não tem coluna no backend — ` +
             'o valor seria descartado em silêncio',
         );
@@ -53,25 +61,59 @@ describe('esquema do backend', () => {
     });
   });
 
-  it('inclui as colunas de controle usadas pela leitura e pela inativação', () => {
-    const system = backend.match(/const SYSTEM_COLUMNS = \[([^\]]+)\]/);
-    assert.ok(system, 'SYSTEM_COLUMNS não encontrado');
-    assert.match(system[1], /'SITUAÇÃO'/);
-    assert.match(system[1], /'LINK'/);
+  it('mantém o mapeamento posicional coerente com os cabeçalhos', () => {
+    Object.entries(schema).forEach(([cat, { headers, fields }]) => {
+      const indexes = Object.values(fields);
+      assert.equal(new Set(indexes).size, indexes.length, `${cat}: dois campos apontam para a mesma coluna`);
+      indexes.forEach((i) => {
+        assert.ok(i < headers.length, `${cat}: índice ${i} além dos cabeçalhos declarados`);
+      });
+    });
   });
 
-  it('cria abas e colunas que faltarem, sem apagar as existentes', () => {
-    assert.match(backend, /function ensureSheet\(/);
-    assert.match(backend, /function ensureSchema\(/);
-    // sheetFor passa por ensureSheet: toda escrita conserta o esquema.
-    assert.match(backend, /function sheetFor\(cat\) \{[\s\S]*?ensureSheet\(/);
-    // Colunas novas entram no fim; nada de limpar a aba.
-    assert.doesNotMatch(backend, /ensureSheet[\s\S]{0,400}?deleteColumn/);
+  it('preserva a ordem original das colunas do V33', () => {
+    // O mapeamento é posicional: mexer na ordem existente reescreveria a
+    // planilha inteira. Campos novos só podem entrar no fim.
+    assert.deepEqual(
+      ['item', 'tag', 'tagAnterior', 'equipamento', 'especificacao', 'fabricante'].map(
+        (f) => schema['NR-10'].fields[f],
+      ),
+      [0, 1, 2, 3, 4, 5],
+    );
+    assert.equal(schema['NR-10'].fields.motivo, 14, 'MOTIVO era a última coluna do V33');
+    assert.equal(schema['DEMAIS EQUIPAMENTOS'].fields.motivo, 11);
+    assert.equal(schema['MANÔMETROS'].fields.motivo, 22);
+  });
+
+  it('tem as colunas de controle usadas pela leitura e pela exclusão', () => {
+    Object.entries(schema).forEach(([cat, { fields }]) => {
+      ['item', 'tag', 'excluido', 'motivo', 'dataValidade'].forEach((f) => {
+        assert.ok(fields[f] !== undefined, `${cat}: falta a coluna ${f}`);
+      });
+    });
+  });
+
+  it('cria colunas que faltarem sem tocar nas existentes', () => {
+    assert.match(backend, /function ensureColumns\(/);
+    // Só escreve a partir da primeira coluna vazia.
+    assert.match(backend, /for \(let c = filled \+ 1; c <= needed/);
+    assert.doesNotMatch(backend, /deleteColumn|clearContents\(\)/);
   });
 
   it('expõe as funções de instalação e de alerta', () => {
     ['function setup(', 'function installDigestTrigger(', 'function testDigest(', 'function sendExpiryDigest(']
       .forEach((fn) => assert.ok(backend.includes(fn), `${fn}...) ausente`));
+  });
+
+  it('corrige as datas em texto dd/mm/aaaa', () => {
+    // new Date('10/03/2025') devolveria 3 de outubro.
+    assert.match(backend, /text\.match\(\/\^\(\\d\{1,2\}\)\\\/\(\\d\{1,2\}\)\\\/\(\\d\{4\}\)/);
+    assert.match(backend, /getSpreadsheetTimeZone\(\)/);
+  });
+
+  it('protege as escritas com trava', () => {
+    assert.match(backend, /LockService\.getScriptLock\(\)/);
+    assert.match(backend, /lock\.waitLock\(/);
   });
 });
 

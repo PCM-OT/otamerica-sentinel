@@ -42,21 +42,21 @@ describe('addMonths', () => {
 
 describe('periodicidade', () => {
   it('usa o padrão da categoria quando o equipamento não define', () => {
-    assert.equal(periodicityFor('NR10'), 6);
-    assert.equal(periodicityFor('MANOMETRO'), 12);
+    assert.equal(periodicityFor('NR-10'), 6);
+    assert.equal(periodicityFor('MANÔMETROS'), 12);
     assert.equal(periodicityFor('CATEGORIA-NOVA'), CONFIG.PERIODICITY_MONTHS.default);
   });
 
   it('o valor do equipamento tem prioridade', () => {
-    assert.equal(periodicityOf({ cat: 'NR10', periodicity: 24 }), 24);
-    assert.equal(periodicityOf({ cat: 'NR10', periodicity: null }), 6);
+    assert.equal(periodicityOf({ cat: 'NR-10', periodicity: 24 }), 24);
+    assert.equal(periodicityOf({ cat: 'NR-10', periodicity: null }), 6);
   });
 });
 
 describe('certificado reprovado', () => {
   const record = (over) => ({
     tag: 'T',
-    cat: 'NR10',
+    cat: 'NR-10',
     result: '',
     activeState: 'Ativo',
     validUntil: null,
@@ -102,14 +102,14 @@ describe('certificado reprovado', () => {
 describe('renovação por periodicidade', () => {
   it('encadeia a partir da validade atual, sem intervalo descoberto', () => {
     const atual = parseDate('15/06/2025');
-    assert.equal(formatBR(addMonths(atual, periodicityOf({ cat: 'NR10' }))), '15/12/2025');
+    assert.equal(formatBR(addMonths(atual, periodicityOf({ cat: 'NR-10' }))), '15/12/2025');
   });
 
   it('a partir de hoje usa a periodicidade do equipamento', () => {
     const base = today();
     const esperado = addMonths(base, 24);
     assert.equal(
-      formatBR(addMonths(base, periodicityOf({ cat: 'MANOMETRO', periodicity: 24 }))),
+      formatBR(addMonths(base, periodicityOf({ cat: 'MANÔMETROS', periodicity: 24 }))),
       formatBR(esperado),
     );
   });

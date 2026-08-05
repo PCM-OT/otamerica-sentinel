@@ -9,7 +9,7 @@
  * outro equipamento — risco real de inativar/alterar o ativo errado.
  */
 
-import { fetchRecords } from './api.js';
+import { fetchHistory, fetchRecords } from './api.js';
 import { CONFIG, periodicityFor, warnDaysFor } from './config.js';
 import { daysUntil, formatBR, parseDate, today } from './utils.js';
 
@@ -46,43 +46,93 @@ export const emit = () => listeners.forEach((fn) => fn());
  * Normalização
  * ------------------------------------------------------------------ */
 
-/** Lê um campo aceitando o nome curto do backend ou o cabeçalho da planilha. */
+/** Primeiro valor não vazio entre várias chaves possíveis. */
 function pick(raw, keys) {
   for (const key of keys) {
-    if (raw[key] !== undefined && raw[key] !== null && String(raw[key]).trim() !== '') {
-      return String(raw[key]).trim();
-    }
-    const detail = raw.fullDetails && raw.fullDetails[key];
-    if (detail !== undefined && detail !== null && String(detail).trim() !== '') {
-      return String(detail).trim();
+    const value = raw[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim();
     }
   }
   return '';
 }
 
+/**
+ * Campos que descrevem o equipamento, por categoria — usados para montar a
+ * ficha e o PDF. A chave é o nome que o backend usa; o valor, o rótulo.
+ */
+const DETAIL_LABELS = {
+  tagAnterior: 'TAG ANTERIOR',
+  equipamento: 'EQUIPAMENTO',
+  especificacao: 'ESPECIFICAÇÃO',
+  fabricante: 'FABRICANTE',
+  dimensoes: 'DIMENSÕES',
+  idMalao: 'ID MALÃO',
+  ordemEnvio: 'ORDEM DE ENVIO',
+  numSerie: 'Nº SÉRIE',
+  modelo: 'MODELO',
+  fluido: 'FLUIDO',
+  faixaIndicacao: 'FAIXA DE INDICAÇÃO',
+  glicerina: 'GLICERINA',
+  posicaoConexao: 'POSIÇÃO DA CONEXÃO',
+  tipoConexao: 'TIPO DE CONEXÃO',
+  diametroConexao: 'DIÂMETRO DA CONEXÃO',
+  materialConexao: 'MATERIAL DA CONEXÃO',
+  diametroCaixa: 'DIÂMETRO DA CAIXA',
+  materialCaixa: 'MATERIAL DA CAIXA',
+  equipAssociado: 'EQUIP. ASSOCIADO',
+  informacoes: 'INFORMAÇÕES',
+  localizacao: 'LOCALIZAÇÃO',
+  motivo: 'MOTIVO DA EXCLUSÃO',
+};
+
+/**
+ * Traduz um registro do backend para a forma que as telas usam.
+ *
+ * O backend nomeia os campos em português e por categoria (equipamento,
+ * numSerie, modelo...), marca exclusão em `excluido: SIM/NÃO` e devolve datas
+ * em ISO. Este é o único ponto do app que conhece esses nomes.
+ */
 function normalize(raw) {
-  const validUntil = parseDate(raw.dateStr ?? raw.date ?? raw.validade);
-  const certifiedAt = parseDate(pick(raw, ['certDate', 'cert_date', 'DATA DE CERTIFICAÇÃO', 'DATA DE CALIBRAÇÃO']));
-  const periodicityRaw = pick(raw, ['periodicidade', 'periodicity', 'PERIODICIDADE (MESES)', 'PERIODICIDADE']);
+  const validUntil = parseDate(pick(raw, ['dataValidade', 'dataValidadeTimestamp', 'dateStr']));
+  const certifiedAt = parseDate(pick(raw, ['dataCertificacao', 'dataCertificacaoTimestamp', 'certDate']));
+  const periodicityRaw = pick(raw, ['periodicidade', 'periodicity']);
   const periodicity = periodicityRaw ? Number(String(periodicityRaw).replace(/[^\d]/g, '')) : null;
 
-  return {
-    tag: String(raw.tag ?? '').trim(),
-    equip: String(raw.equip ?? '').trim(),
-    local: String(raw.local ?? '').trim(),
-    cat: String(raw.cat ?? '').trim(),
-    model: String(raw.model ?? '').trim(),
-    fab: String(raw.fab ?? '').trim(),
-    certNum: String(raw.certNum ?? '').trim(),
-    result: String(raw.result ?? '').trim(),
-    file: String(raw.file ?? '').trim(),
-    activeState: String(raw.activeState ?? '').trim(),
-    fullDetails: raw.fullDetails && typeof raw.fullDetails === 'object' ? raw.fullDetails : {},
+  // Cada categoria descreve o equipamento num campo diferente.
+  const equip = pick(raw, ['equipamento', 'equip', 'modelo', 'especificacao', 'numSerie']);
 
-    // Metrologia
-    lab: pick(raw, ['lab', 'LABORATÓRIO', 'LABORATÓRIO / ORGANISMO CALIBRADOR', 'ORGANISMO CALIBRADOR']),
-    uncertainty: pick(raw, ['incerteza', 'uncertainty', 'INCERTEZA DE MEDIÇÃO', 'INCERTEZA']),
-    ema: pick(raw, ['ema', 'EMA', 'ERRO MÁXIMO ADMISSÍVEL']),
+  const fullDetails = {};
+  Object.entries(DETAIL_LABELS).forEach(([key, label]) => {
+    const value = pick(raw, [key]);
+    if (value) fullDetails[label] = value;
+  });
+
+  return {
+    // `item` é o identificador estável do equipamento na planilha; a TAG pode
+    // mudar (por isso existe TAG ANTERIOR), mas o item permanece.
+    item: pick(raw, ['item']),
+    tag: pick(raw, ['tag']),
+    tagAnterior: pick(raw, ['tagAnterior']),
+    equip,
+    local: pick(raw, ['localizacao', 'local']),
+    cat: pick(raw, ['category', 'cat']),
+    model: pick(raw, ['modelo', 'especificacao', 'model']),
+    fab: pick(raw, ['fabricante', 'fab']),
+    certNum: pick(raw, ['numCertificado', 'certNum']),
+    result: pick(raw, ['resultado', 'result']),
+    file: pick(raw, ['link', 'file']),
+    reason: pick(raw, ['motivo']),
+
+    // O backend marca exclusão em EXCLUIDO = SIM/NÃO.
+    activeState: pick(raw, ['excluido']).toUpperCase() === 'SIM' ? 'Inativo' : 'Ativo',
+
+    // Metrologia — colunas acrescentadas ao fim das abas; quando não existem,
+    // chegam vazias e a ficha simplesmente não mostra a linha.
+    lab: pick(raw, ['lab', 'laboratorio']),
+    uncertainty: pick(raw, ['incerteza']),
+    ema: pick(raw, ['ema']),
+
     certifiedAt,
     certifiedAtLabel: certifiedAt ? formatBR(certifiedAt) : '',
     periodicity: Number.isFinite(periodicity) && periodicity > 0 ? periodicity : null,
@@ -92,6 +142,7 @@ function normalize(raw) {
     days: null,
     health: 'none',
     blocked: false,
+    fullDetails,
     raw,
   };
 }
@@ -100,29 +151,34 @@ function normalize(raw) {
 export const periodicityOf = (item) => item.periodicity || periodicityFor(item.cat);
 
 /** Um certificado reprovado invalida o equipamento, mesmo dentro do prazo. */
-export const isRejected = (item) => item.result.toUpperCase() === 'REPROVADO';
+export const isRejected = (item) => item.result.toUpperCase().includes('REPROVADO');
 
 export const isActive = (item) => item.activeState !== 'Inativo';
+
+/** Calcula dias restantes e status de um registro. */
+function applyStatus(item, ref = today()) {
+  item.blocked = CONFIG.BLOCK_ON_REJECTED && isRejected(item);
+
+  if (!item.validUntil) {
+    item.days = null;
+    item.health = item.blocked ? 'danger' : 'none';
+    return item;
+  }
+
+  const diff = daysUntil(item.validUntil, ref);
+  item.days = diff;
+
+  if (item.blocked) item.health = 'danger';
+  else if (diff < 0) item.health = 'danger';
+  else if (diff <= warnDaysFor(item.cat)) item.health = 'warn';
+  else item.health = 'ok';
+  return item;
+}
 
 /** Recalcula dias restantes e status. Chamado no load e na virada do dia. */
 export function recalcStatus() {
   const ref = today();
-  state.records.forEach((item) => {
-    item.blocked = CONFIG.BLOCK_ON_REJECTED && isRejected(item);
-
-    if (!item.validUntil) {
-      item.days = null;
-      item.health = item.blocked ? 'danger' : 'none';
-      return;
-    }
-    const diff = daysUntil(item.validUntil, ref);
-    item.days = diff;
-
-    if (item.blocked) item.health = 'danger';
-    else if (diff < 0) item.health = 'danger';
-    else if (diff <= warnDaysFor(item.cat)) item.health = 'warn';
-    else item.health = 'ok';
-  });
+  state.records.forEach((item) => applyStatus(item, ref));
 }
 
 /** Um registro por TAG: o de maior validade (sem data fica por último). */
@@ -195,14 +251,40 @@ function pruneSelections() {
 
 export const getByTag = (tag) => state.latest.find((i) => i.tag === tag) || null;
 
-export function historyFor(tag) {
-  return state.records
-    .filter((r) => r.tag === tag)
-    .sort((a, b) => {
-      const av = a.validUntil ? a.validUntil.getTime() : -Infinity;
-      const bv = b.validUntil ? b.validUntil.getTime() : -Infinity;
-      return bv - av;
-    });
+const byValidityDesc = (a, b) => {
+  const av = a.validUntil ? a.validUntil.getTime() : -Infinity;
+  const bv = b.validUntil ? b.validUntil.getTime() : -Infinity;
+  return bv - av;
+};
+
+/** O que dá para mostrar sem ir ao servidor: a versão vigente. */
+export function localHistoryFor(tag) {
+  return state.records.filter((r) => r.tag === tag).sort(byValidityDesc);
+}
+
+/**
+ * Histórico completo de certificados de uma TAG.
+ *
+ * Precisa de uma chamada própria: a carga do painel traz apenas a versão
+ * vigente de cada equipamento, então filtrar localmente devolveria uma linha
+ * só — dando a impressão de que o histórico se perdeu.
+ */
+export async function loadHistoryFor(tag) {
+  try {
+    const rows = await fetchHistory(tag);
+    const history = rows.map(normalize);
+    history.forEach(applyStatus);
+    return { history: history.sort(byValidityDesc), complete: true };
+  } catch (error) {
+    return {
+      history: localHistoryFor(tag),
+      complete: false,
+      reason:
+        error.message === 'NAO_IMPLEMENTADO'
+          ? 'Esta implantação do backend não expõe o histórico (action=history).'
+          : error.message,
+    };
+  }
 }
 
 export function itemsByTags(tags) {

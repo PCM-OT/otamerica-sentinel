@@ -47,6 +47,7 @@ import { bindRegister } from './views/register.js';
 import {
   bindTables,
   clearSelection,
+  renderCategoryButtons,
   renderLocalOptions,
   renderTable,
   renderTables,
@@ -178,6 +179,7 @@ function renderAll() {
   renderQuickFilters();
   renderCategoryPills();
   renderDashboard();
+  renderCategoryButtons();
   renderLocalOptions();
   renderTables();
   renderKpis();
@@ -346,23 +348,24 @@ function bindNavigation() {
 }
 
 function bindFilterButtons() {
-  document.querySelectorAll('[data-filter-table]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const name = btn.dataset.filterTable;
-      const kind = btn.dataset.filterKind; // 'status' | 'cat'
-      const value = btn.dataset.filterValue;
-      const filters = TABLES[name].filters();
-      toggleFilterValue(filters[kind], value);
+  // Delegação: os botões de categoria são criados em tempo de execução.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter-table]');
+    if (!btn) return;
 
-      document
-        .querySelectorAll(`[data-filter-table="${name}"][data-filter-kind="${kind}"]`)
-        .forEach((other) => {
-          const on = filters[kind].has(other.dataset.filterValue);
-          other.classList.toggle('active', on);
-          other.setAttribute('aria-pressed', String(on));
-        });
-      renderTable(name);
-    });
+    const name = btn.dataset.filterTable;
+    const kind = btn.dataset.filterKind; // 'status' | 'cat'
+    const filters = TABLES[name].filters();
+    toggleFilterValue(filters[kind], btn.dataset.filterValue);
+
+    document
+      .querySelectorAll(`[data-filter-table="${name}"][data-filter-kind="${kind}"]`)
+      .forEach((other) => {
+        const on = filters[kind].has(other.dataset.filterValue);
+        other.classList.toggle('active', on);
+        other.setAttribute('aria-pressed', String(on));
+      });
+    renderTable(name);
   });
 
   Object.entries(TABLES).forEach(([name, cfg]) => {

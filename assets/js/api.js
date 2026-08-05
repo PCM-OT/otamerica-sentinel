@@ -1,88 +1,125 @@
 /**
- * SENTINEL — Camada de acesso ao backend (Google Apps Script).
+ * SENTINEL — Camada de acesso ao backend (Google Apps Script "Nexus").
  *
  * Nenhum outro módulo faz fetch diretamente.
+ *
+ * CONTRATO DO BACKEND (o que o Apps Script realmente espera/devolve)
+ *
+ *   Leitura   GET  ?action=read              → { success: true, data: [...] }
+ *             GET  ?action=history&tag=X     → { success: true, history: [...] }
+ *             GET  ?action=read_suggestions  → { success: true, data: [...] }
+ *
+ *   Escrita   POST corpo JSON (não FormData): { action, ...payload }
+ *             → { success: true, ... }  ou  { success: false, error: "..." }
+ *
+ * Dois detalhes que não são óbvios e quebram tudo se ignorados:
+ *
+ *   1. `GET` sem `action` NÃO devolve dados: o Apps Script responde com a
+ *      página HTML embutida. Por isso `action=read` é obrigatório.
+ *   2. O corpo do POST é lido de `e.postData.contents`, ou seja, precisa ser
+ *      uma string JSON. Enviar FormData faz o `JSON.parse` do servidor falhar.
+ *      Mandamos a string sem cabeçalho Content-Type próprio: assim continua
+ *      sendo uma requisição "simples", sem preflight e compatível com no-cors.
  */
 
 import { CONFIG } from './config.js';
 
-export function toFormData(obj) {
-  const fd = new FormData();
-  Object.entries(obj).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) fd.append(k, v);
-  });
-  return fd;
+function apiUrl(params = {}) {
+  const url = new URL(CONFIG.API_URL);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  if (CONFIG.API_TOKEN) url.searchParams.set('token', CONFIG.API_TOKEN);
+  url.searchParams.set('_ts', Date.now()); // evita cache intermediário
+  return url.toString();
 }
 
-function withToken(fd) {
-  if (CONFIG.API_TOKEN) fd.append('token', CONFIG.API_TOKEN);
-  return fd;
+async function readJson(response) {
+  if (!response.ok) throw new Error(`Servidor respondeu HTTP ${response.status}`);
+
+  const text = await response.text();
+  // O Apps Script devolve a página HTML quando não reconhece a ação: dizer
+  // "não é JSON" seria enigmático, então explicamos a causa provável.
+  if (text.trim().startsWith('<')) {
+    throw new Error(
+      'O servidor devolveu HTML em vez de dados. Confirme que a implantação do ' +
+        'Apps Script está atualizada e que a URL termina em /exec.',
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('A resposta do servidor não é um JSON válido.');
+  }
+}
+
+/** Normaliza os formatos de erro já vistos em produção. */
+function unwrap(payload, key = 'data') {
+  if (Array.isArray(payload)) {
+    // Formato antigo: lista pura, com erro sinalizado no primeiro item.
+    if (payload.length && payload[0] && payload[0].error) {
+      throw new Error(payload[0].msg || 'Erro reportado pelo servidor.');
+    }
+    return payload;
+  }
+  if (payload && payload.success === false) {
+    throw new Error(payload.error || 'Erro reportado pelo servidor.');
+  }
+  if (payload && Array.isArray(payload[key])) return payload[key];
+  throw new Error('Formato inesperado na resposta do servidor.');
 }
 
 /**
- * Baixa a base completa (todos os registros, incluindo histórico).
+ * Baixa a base (uma linha por equipamento — o backend já devolve apenas a
+ * versão mais recente de cada item).
+ *
  * Devolve também de onde veio: sem rede, o service worker entrega a última
  * cópia local e marca a resposta com X-Sentinel-Cache.
  */
 export async function fetchRecords() {
-  const url = new URL(CONFIG.API_URL);
-  if (CONFIG.API_TOKEN) url.searchParams.set('token', CONFIG.API_TOKEN);
-  url.searchParams.set('_ts', Date.now()); // evita cache intermediário
-
-  const response = await fetch(url.toString(), { method: 'GET' });
-  if (!response.ok) throw new Error(`Servidor respondeu HTTP ${response.status}`);
-
-  let data;
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error('A resposta do servidor não é um JSON válido. Verifique a implantação do Apps Script.');
-  }
-
-  // O Apps Script sinaliza erro devolvendo [{ error: true, msg: "..." }]
-  if (Array.isArray(data) && data.length && data[0] && data[0].error) {
-    throw new Error(data[0].msg || 'Erro reportado pelo servidor.');
-  }
-  if (data && !Array.isArray(data) && data.error) {
-    throw new Error(data.msg || data.error || 'Erro reportado pelo servidor.');
-  }
-  if (!Array.isArray(data)) throw new Error('Formato inesperado: esperava uma lista de registros.');
+  const response = await fetch(apiUrl({ action: 'read' }), { method: 'GET' });
+  const records = unwrap(await readJson(response));
 
   const cachedAt = response.headers.get('X-Sentinel-Cached-At');
   return {
-    records: data,
+    records,
     fromCache: response.headers.get('X-Sentinel-Cache') === 'hit',
     cachedAt: cachedAt ? new Date(cachedAt) : null,
   };
 }
 
 /**
- * Baixa a trilha de auditoria (quem alterou o quê e quando).
- * Requer `action=audit` no doGet do Apps Script — ver backend/Code.gs.example.
+ * Histórico de certificados de uma TAG.
+ *
+ * Precisa ser uma chamada própria: `action=read` devolve só a versão vigente
+ * de cada equipamento, então o histórico não está na carga do painel.
+ */
+export async function fetchHistory(tag) {
+  const response = await fetch(apiUrl({ action: 'history', tag }), { method: 'GET' });
+  const payload = await readJson(response);
+  if (payload && payload.success === false) throw new Error(payload.error || 'Falha ao ler o histórico.');
+  if (payload && Array.isArray(payload.history)) return payload.history;
+  // Implantação antiga, sem `history` no doGet.
+  throw new Error('NAO_IMPLEMENTADO');
+}
+
+/** Caixa de sugestões (área ADM). */
+export async function fetchSuggestions() {
+  const response = await fetch(apiUrl({ action: 'read_suggestions' }), { method: 'GET' });
+  return unwrap(await readJson(response));
+}
+
+/**
+ * Trilha de auditoria. Requer `action=audit` no doGet — ver backend/Code.gs.
  */
 export async function fetchAudit({ limit = 300 } = {}) {
-  const url = new URL(CONFIG.API_URL);
-  url.searchParams.set('action', 'audit');
-  url.searchParams.set('limit', String(limit));
-  if (CONFIG.API_TOKEN) url.searchParams.set('token', CONFIG.API_TOKEN);
-  url.searchParams.set('_ts', Date.now());
+  const response = await fetch(apiUrl({ action: 'audit', limit }), { method: 'GET' });
+  const payload = await readJson(response);
 
-  const response = await fetch(url.toString(), { method: 'GET' });
-  if (!response.ok) throw new Error(`Servidor respondeu HTTP ${response.status}`);
-
-  const data = await response.json().catch(() => null);
-  if (Array.isArray(data) && data.length && data[0] && data[0].error) {
-    throw new Error(data[0].msg || 'Erro reportado pelo servidor.');
-  }
-  if (!Array.isArray(data)) {
-    // O script antigo ignora `action` no GET e devolve a lista de equipamentos.
-    throw new Error('NAO_IMPLEMENTADO');
-  }
-  // Distingue "lista de auditoria" de "lista de equipamentos" devolvida por engano.
-  if (data.length && data[0] && data[0].tag !== undefined && data[0].action === undefined) {
-    throw new Error('NAO_IMPLEMENTADO');
-  }
-  return data;
+  const rows = Array.isArray(payload) ? payload : payload && payload.data;
+  if (!Array.isArray(rows)) throw new Error('NAO_IMPLEMENTADO');
+  // Distingue a trilha de uma lista de equipamentos devolvida por engano.
+  if (rows.length && rows[0] && rows[0].action === undefined) throw new Error('NAO_IMPLEMENTADO');
+  return rows;
 }
 
 /**
@@ -93,18 +130,17 @@ export async function fetchAudit({ limit = 300 } = {}) {
  * chamou deve verificar o efeito recarregando a base (ver store.verifyWrite).
  * Nunca reporte sucesso ao usuário só porque o fetch não lançou erro.
  */
-export async function postAction(params) {
-  const fd = withToken(params instanceof FormData ? params : toFormData(params));
+export async function postAction(payload) {
+  const body = JSON.stringify(CONFIG.API_TOKEN ? { ...payload, token: CONFIG.API_TOKEN } : payload);
 
   if (CONFIG.WRITE_MODE === 'cors') {
-    const response = await fetch(CONFIG.API_URL, { method: 'POST', body: fd });
-    if (!response.ok) throw new Error(`Servidor respondeu HTTP ${response.status}`);
-    const json = await response.json().catch(() => null);
-    if (json && json.ok === false) throw new Error(json.error || 'O servidor recusou a operação.');
-    return { confirmed: true, data: json };
+    const response = await fetch(CONFIG.API_URL, { method: 'POST', body });
+    const result = await readJson(response);
+    if (result && result.success === false) throw new Error(result.error || 'O servidor recusou a operação.');
+    return { confirmed: true, data: result };
   }
 
-  await fetch(CONFIG.API_URL, { method: 'POST', mode: 'no-cors', body: fd });
+  await fetch(CONFIG.API_URL, { method: 'POST', mode: 'no-cors', body });
   return { confirmed: false, data: null };
 }
 

@@ -11,7 +11,7 @@ import { postAction, postBatch } from './api.js';
 import { isOffline } from './pwa.js';
 import { authorFields, can, requireIdentity } from './session.js';
 import { getByTag, load, verifyWrite } from './store.js';
-import { dateKey, setBusy, toast } from './utils.js';
+import { dateKey, formatBR, setBusy, toast } from './utils.js';
 
 const MAX_FILE_MB = 10;
 
@@ -114,10 +114,13 @@ export async function deleteItems(tags, reason) {
   if (!author) return false;
 
   setBusy(true, list.length > 1 ? `Inativando ${list.length} equipamentos...` : 'Inativando equipamento...');
-  const payloads = list.map((tag) => {
-    const item = getByTag(tag);
-    return { action: 'delete', tag, reason, cat: item ? item.cat : '', ...author };
-  });
+  const payloads = list.map((tag) => ({
+    action: 'delete',
+    tag,
+    // O backend grava o motivo na coluna MOTIVO e marca EXCLUIDO = SIM.
+    motivo: reason,
+    ...author,
+  }));
 
   const results = await postBatch(payloads, {
     onProgress: (done, total) => setBusy(true, `Enviando ${done} de ${total}...`),
@@ -136,6 +139,14 @@ export async function deleteItems(tags, reason) {
  * ------------------------------------------------------------------ */
 
 /**
+ * Renova a validade dos equipamentos selecionados.
+ *
+ * O backend não tem uma ação "mudar a data": o histórico é imutável e cada
+ * certificado é uma linha nova. Renovar é, portanto, criar uma nova versão do
+ * registro — os dados do equipamento são copiados e só as datas mudam. É
+ * também o comportamento correto para conformidade: a validade anterior
+ * continua registrada, com quem a renovou e quando.
+ *
  * `dateFor` pode ser uma Date (mesma validade para todos) ou uma função
  * (tag) => Date, usada na renovação por periodicidade, em que cada
  * equipamento tem a própria data-base.
@@ -154,14 +165,16 @@ export async function updateValidity(tags, dateFor) {
   list.forEach((tag) => {
     const date = resolve(tag);
     if (!date) return; // sem data-base: nada a atualizar
-    expected.set(tag, dateKey(date));
     const item = getByTag(tag);
+    if (!item) return;
+
+    expected.set(tag, dateKey(date));
     payloads.push({
-      action: 'update_date',
-      tag,
-      // O backend espera dd/mm/aaaa, mesmo formato da planilha.
-      newDate: date.toLocaleDateString('pt-BR'),
-      cat: item ? item.cat : '',
+      action: 'create',
+      category: item.cat,
+      // Repassa o registro atual e sobrescreve só a validade: a nova linha
+      // preserva fabricante, modelo, localização e o resto.
+      data: { ...item.raw, tag: item.tag, dataValidade: sheetDate(date) },
       ...author,
     });
   });
@@ -192,15 +205,15 @@ export async function updateValidity(tags, dateFor) {
  * Cadastro
  * ------------------------------------------------------------------ */
 
-export async function createEquipment(formData, tag) {
+export async function createEquipment(category, data) {
+  const tag = data.tag;
   const author = await authorize('este cadastro');
   if (!author) return false;
-  Object.entries(author).forEach(([k, v]) => formData.append(k, v));
 
   setBusy(true, 'Salvando equipamento...');
   let results;
   try {
-    results = [{ ok: true, value: await postAction(formData) }];
+    results = [{ ok: true, value: await postAction({ action: 'create', category, data, ...author }) }];
   } catch (error) {
     results = [{ ok: false, error }];
   }
@@ -239,35 +252,43 @@ async function fireAndReport(payload, { busyMsg, sentMsg }) {
   }
 }
 
-export const sendSuggestion = (type, msg) =>
-  fireAndReport({ action: 'suggestion', type, msg }, { busyMsg: 'Enviando sugestão...', sentMsg: 'Sugestão enviada.' });
+export const sendSuggestion = (nome, categoria, descricao) =>
+  fireAndReport(
+    { action: 'suggestion', data: { nome: nome || 'Anônimo', categoria, descricao } },
+    { busyMsg: 'Enviando sugestão...', sentMsg: 'Sugestão enviada.' },
+  );
 
-export async function importCsv(cat, csvContent) {
-  const author = await authorize('esta substituição de base');
-  if (!author) return false;
-  if (!can('admin')) {
-    toast('Apenas administradores podem substituir bases.', 'warn', 8000);
-    return false;
-  }
+/**
+ * Data no formato que o backend lê sem trocar o dia.
+ *
+ * O `parseDateSafe` do Apps Script usa `new Date(texto)`: "10/03/2025" seria
+ * lido como 3 de outubro (mm/dd), e "2025-03-10" como meia-noite UTC — que no
+ * Brasil vira dia 9. Com hora local explícita, os dois problemas somem.
+ */
+export function sheetDate(date) {
+  if (!date) return '';
+  const iso = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+  return `${iso}T00:00:00`;
+}
 
-  setBusy(true, 'Substituindo a base...');
-  try {
-    await postAction({ action: 'import_csv', cat, csvContent, ...author });
-  } catch (error) {
-    setBusy(false);
-    toast(`Falha ao enviar o CSV: ${error.message}`, 'error', 8000);
-    return false;
-  }
-  setBusy(true, 'Recarregando a base...');
-  await new Promise((r) => setTimeout(r, 2500));
-  try {
-    await load();
-    setBusy(false);
-    toast(`Base de ${cat} recarregada. Confira os totais antes de seguir.`, 'success', 9000);
-    return true;
-  } catch (error) {
-    setBusy(false);
-    toast(`Base enviada, mas a recarga falhou: ${error.message}`, 'warn', 9000);
-    return false;
-  }
+/**
+ * Substituição de base por CSV.
+ *
+ * O backend não expõe essa ação: o modelo é de histórico imutável, em que
+ * cada certificado é uma linha nova e nada é sobrescrito. Manter o botão
+ * enviando uma ação inexistente daria "Ação desconhecida" — ou, pior, a
+ * impressão de que funcionou, já que no modo no-cors a resposta é opaca.
+ */
+export async function importCsv() {
+  toast(
+    'A substituição de base por CSV não existe neste backend: o histórico é imutável. ' +
+      'Para carga em massa, edite a planilha diretamente.',
+    'warn',
+    10000,
+  );
+  return false;
 }

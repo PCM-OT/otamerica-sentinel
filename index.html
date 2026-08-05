@@ -131,16 +131,14 @@
       <span>ÁREA ADM</span>
       <button type="button" class="btn-mini" id="btn-help" aria-label="Como atualizar a base">?</button>
     </div>
-    <label class="adm-hint" for="adm-cat-select">Substituir base a partir de CSV</label>
-    <select id="adm-cat-select" class="adm-input">
-      <option value="NR10">Base NR-10</option>
-      <option value="MANOMETRO">Base Manômetros</option>
-      <option value="OUTROS">Outros Equipamentos</option>
-    </select>
-    <input type="file" id="adm-file-input" accept=".csv,text/csv" class="adm-input" aria-label="Arquivo CSV">
-    <button type="button" class="btn-upload" id="btn-upload-csv">
-      <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg> SUBSTITUIR BASE
-    </button>
+    <div id="adm-csv-block" hidden>
+      <label class="adm-hint" for="adm-cat-select">Substituir base a partir de CSV</label>
+      <select id="adm-cat-select" class="adm-input"></select>
+      <input type="file" id="adm-file-input" accept=".csv,text/csv" class="adm-input" aria-label="Arquivo CSV">
+      <button type="button" class="btn-upload" id="btn-upload-csv">
+        <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg> SUBSTITUIR BASE
+      </button>
+    </div>
     <button type="button" class="btn-sheet" id="btn-open-sheet">
       <svg class="icon" aria-hidden="true"><use href="#i-external"/></svg> ABRIR PLANILHA
     </button>
@@ -229,16 +227,12 @@
 
       <div class="form-group">
         <label class="form-label" for="reg-cat">Tipo de equipamento</label>
-        <select id="reg-cat" class="form-input">
-          <option value="NR10">NR-10 / Elétrica</option>
-          <option value="MANOMETRO">Manômetro</option>
-          <option value="OUTROS">Demais equipamentos</option>
-        </select>
+        <select id="reg-cat" class="form-input"></select>
       </div>
 
       <div id="dynamic-fields" class="form-grid"></div>
 
-      <div class="form-file">
+      <div class="form-file" id="reg-file-block" hidden>
         <label class="form-label" for="reg-file">Anexar certificado (PDF ou imagem, até 10 MB)</label>
         <input type="file" id="reg-file" class="form-input" accept=".pdf,image/*">
       </div>
@@ -338,10 +332,7 @@
         <div class="controls-row-bottom">
           <div class="filter-block">
             <span class="filter-lbl">Categoria</span>
-            <button type="button" class="btn-cat active" data-filter-table="export" data-filter-kind="cat" data-filter-value="all" aria-pressed="true">TODOS</button>
-            <button type="button" class="btn-cat" data-filter-table="export" data-filter-kind="cat" data-filter-value="NR10" aria-pressed="false">NR10</button>
-            <button type="button" class="btn-cat" data-filter-table="export" data-filter-kind="cat" data-filter-value="MANOMETRO" aria-pressed="false">MANÔMETROS</button>
-            <button type="button" class="btn-cat" data-filter-table="export" data-filter-kind="cat" data-filter-value="OUTROS" aria-pressed="false">OUTROS</button>
+            <span class="cat-buttons" id="export-cat-buttons"></span>
           </div>
           <div class="filter-block">
             <span class="filter-lbl">Status</span>
@@ -384,10 +375,7 @@
         <div class="controls-row-bottom">
           <div class="filter-block">
             <span class="filter-lbl">Categoria</span>
-            <button type="button" class="btn-cat active" data-filter-table="bulk" data-filter-kind="cat" data-filter-value="all" aria-pressed="true">TODOS</button>
-            <button type="button" class="btn-cat" data-filter-table="bulk" data-filter-kind="cat" data-filter-value="NR10" aria-pressed="false">NR10</button>
-            <button type="button" class="btn-cat" data-filter-table="bulk" data-filter-kind="cat" data-filter-value="MANOMETRO" aria-pressed="false">MANÔMETROS</button>
-            <button type="button" class="btn-cat" data-filter-table="bulk" data-filter-kind="cat" data-filter-value="OUTROS" aria-pressed="false">OUTROS</button>
+            <span class="cat-buttons" id="bulk-cat-buttons"></span>
           </div>
           <div class="filter-block">
             <span class="filter-lbl">Status</span>
