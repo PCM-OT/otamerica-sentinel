@@ -18,10 +18,14 @@ export const CONFIG = {
 
   /**
    * Token compartilhado enviado em toda requisição (parâmetro `token`).
-   * Deixe vazio enquanto o Apps Script não validar o token.
-   * Ver backend/Code.gs.example para o lado do servidor.
+   * Precisa ser idêntico a CONFIG.TOKEN em backend/Code.gs.
+   *
+   * O backend faz `if (!CONFIG.TOKEN) return` antes de validar, então enviar o
+   * token para uma implantação que ainda não o exige é inofensivo — o
+   * parâmetro é ignorado. Só passa a valer quando o Apps Script for
+   * republicado com o mesmo valor.
    */
-  API_TOKEN: '',
+  API_TOKEN: 'x3X0VrCGQiZ-en4OxGNeKcVbSGB_Ptnp',
 
   /**
    * 'no-cors'  → não é possível ler a resposta do servidor. O app compensa

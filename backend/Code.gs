@@ -48,10 +48,10 @@ const CONFIG = {
    * recomendado). Não é autenticação forte — o token também fica no cliente —
    * mas impede o acesso de quem apenas descobriu a URL.
    */
-  TOKEN: '',
+  TOKEN: 'x3X0VrCGQiZ-en4OxGNeKcVbSGB_Ptnp',
 
   /** URL pública do app (Vercel), usada nos links do e-mail de alerta. */
-  APP_URL: '',
+  APP_URL: 'https://otamerica-sentinel.vercel.app',
 
   SUGGESTION_SHEET: 'SUGESTÕES',
   LOG_SHEET: 'AUDITORIA',

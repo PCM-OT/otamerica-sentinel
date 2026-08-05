@@ -130,9 +130,16 @@ Passos recomendados, em ordem:
 
 1. **Republique o Apps Script com uma URL nova** (a anterior foi compartilhada) e
    troque `ADMIN_PASSCODE`.
-2. Instale `backend/Code.gs.example`, que já valida `token` em toda requisição,
-   e preencha `API_TOKEN` no `config.js`. Isso barra acesso casual — não é
-   autenticação forte, já que o token também vai no cliente.
+2. Instale `backend/Code.gs` (é a versão atual, com as correções de data,
+   mapeamento e concorrência; o `.example` é o template antigo). Ele já valida
+   `token` em toda requisição, e `CONFIG.TOKEN` já vem preenchido com o mesmo
+   valor de `API_TOKEN` em `assets/js/config.js`. Isso barra acesso casual — não
+   é autenticação forte, já que o token também vai no cliente.
+
+   O `checkToken` faz `if (!CONFIG.TOKEN) return`, então a ordem é segura: o
+   site pode ir ao ar enviando o token antes de o Apps Script ser republicado.
+   Enquanto o backend antigo estiver no ar ele ignora o parâmetro extra; assim
+   que a nova implantação subir, passa a exigi-lo.
 3. Para proteção real, restrinja a implantação a contas do domínio da empresa
    ("Executar como: usuário que acessa" + "Quem pode acessar: usuários de
    <sua organização>"), ou migre para um backend com login.
