@@ -45,10 +45,38 @@ export const api = {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
+        throw new Error(
+          `O servidor respondeu HTTP ${response.status}. ` +
+            (response.status === 404
+              ? 'A implantação do Apps Script não existe mais — a URL muda quando se cria uma "Nova implantação" em vez de publicar uma nova versão da existente.'
+              : 'Confira a implantação do Apps Script.'),
+        );
       }
 
-      const json = await response.json();
+      // Lido como texto primeiro: o Apps Script devolve HTML quando a
+      // implantação está desatualizada ou exige login, e nesse caso
+      // response.json() estoura "Unexpected token '<'", que não diz nada a
+      // quem está usando o sistema.
+      const raw = await response.text();
+      if (raw.trim().startsWith('<')) {
+        throw new Error(
+          'O servidor devolveu uma página HTML em vez de dados. Em geral isso ' +
+            'significa que a implantação do Apps Script está desatualizada, ou que ' +
+            'o acesso não está como "Qualquer pessoa".',
+        );
+      }
+
+      let json: any;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        throw new Error('A resposta do servidor não é um JSON válido.');
+      }
+
+      if (json && json.success === false && json.error) {
+        // Erro que o próprio Apps Script reportou (token inválido, por exemplo).
+        throw new Error(json.error);
+      }
 
       if (json.success && Array.isArray(json.data)) {
         const mappedData = json.data.map((item: any, index: number) => {
