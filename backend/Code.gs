@@ -267,17 +267,47 @@ function buildDate(year, month, day) {
   return date.getTime();
 }
 
+/**
+ * Fuso da planilha, resolvido uma vez por execução.
+ *
+ * Dois motivos para não chamar getSpreadsheetTimeZone() direto no formatDate:
+ *
+ *   1. Ele pode devolver vazio, e aí Utilities.formatDate rejeita a chamada
+ *      inteira com "Argumento inválido: timeZone. Este argumento deveria ser
+ *      do tipo: String" — o que derrubava a leitura da base inteira. Caindo
+ *      para o fuso do script, uma data possivelmente deslocada em algumas
+ *      horas é muito melhor do que nenhum dado.
+ *   2. ss() reabre a planilha a cada chamada, e formatDateToISO roda duas
+ *      vezes por registro: sem cache é uma abertura por data formatada.
+ */
+var TIMEZONE_CACHE = null;
+function timeZone() {
+  if (TIMEZONE_CACHE) return TIMEZONE_CACHE;
+
+  var zone = null;
+  try {
+    zone = ss().getSpreadsheetTimeZone();
+  } catch (error) {
+    zone = null;
+  }
+  if (typeof zone !== 'string' || !zone) zone = Session.getScriptTimeZone();
+  if (typeof zone !== 'string' || !zone) zone = 'America/Sao_Paulo';
+
+  TIMEZONE_CACHE = zone;
+  return zone;
+}
+
 /** Timestamp → 'aaaa-mm-dd' no fuso da PLANILHA (não no do script). */
 function formatDateToISO(value) {
   const timestamp = parseDateSafe(value);
   if (!timestamp) return '';
-  return Utilities.formatDate(new Date(timestamp), ss().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  return Utilities.formatDate(new Date(timestamp), timeZone(), 'yyyy-MM-dd');
 }
 
 function formatDateBR(value) {
   const timestamp = parseDateSafe(value);
   if (!timestamp) return '';
-  return Utilities.formatDate(new Date(timestamp), ss().getSpreadsheetTimeZone(), 'dd/MM/yyyy');
+  return Utilities.formatDate(new Date(timestamp), timeZone(), 'dd/MM/yyyy');
 }
 
 /* ------------------------------------------------------------------ *
@@ -815,7 +845,7 @@ function buildDigest() {
     return i.tag + ' — ' + i.equip + (i.local ? ' (' + i.local + ')' : '') + ' — vence ' + i.date + ' — ' + label(i);
   };
 
-  const dateLabel = Utilities.formatDate(today, ss().getSpreadsheetTimeZone(), 'dd/MM/yyyy');
+  const dateLabel = Utilities.formatDate(today, timeZone(), 'dd/MM/yyyy');
   const text = [
     'Resumo Sentinel — ' + dateLabel,
     '',
