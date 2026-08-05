@@ -93,8 +93,12 @@ export const CONFIG = {
   /**
    * URL pública do app, usada nos QR Codes. Vazio = detecta automaticamente
    * a partir do endereço atual.
+   *
+   * Precisa incluir o esquema e não terminar em barra: o valor é concatenado
+   * como `${appBaseUrl()}?tag=...`. Sem "https://", o QR guarda um endereço
+   * relativo e o leitor do celular abre uma busca em vez do equipamento.
    */
-  APP_URL: 'otamerica-sentinel.vercel.app',
+  APP_URL: 'https://otamerica-sentinel.vercel.app',
 
   /**
    * Recursos que dependem de suporte no backend. Deixe `false` enquanto o
