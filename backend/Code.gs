@@ -58,7 +58,7 @@ const CONFIG = {
    * público. Validando no servidor, o cliente envia só o que o usuário
    * digitou e o segredo nunca sai daqui. Troque este valor.
    */
-  ADMIN_PASSCODE: 'troque-esta-senha',
+  ADMIN_PASSCODE: 'Toil@2025',
 
   /** URL pública do app (Vercel), usada nos links do e-mail de alerta. */
   APP_URL: 'https://otamerica-sentinel.vercel.app',
