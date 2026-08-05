@@ -87,8 +87,13 @@ export const api = {
           const newItem: any = {
             ...item, 
             
-            // Geração de ID interno único para evitar bugs de renderização no React
-            internalId: `eq-${index}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            // ID ESTÁVEL entre recargas. Antes era
+            // `eq-${index}-${Date.now()}-${random}`, recalculado a cada
+            // leitura: como ele é a key da lista, o React descartava e
+            // remontava TODOS os cards a cada atualização automática, em vez
+            // de reaproveitar os que não mudaram. Derivando de dados do
+            // próprio registro, a key só muda quando o registro muda.
+            internalId: `${item.category || item.categoria || 'cat'}-${item.item || index}-${item.tag || index}`,
             
             // Identificação
             tag: item.tag || item.TAG || item.patrimonio || item.PATRIMONIO || 'Sem TAG',

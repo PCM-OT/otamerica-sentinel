@@ -35,8 +35,9 @@
  *   1. Cole este arquivo por cima do Code.gs atual.
  *   2. Preencha CONFIG abaixo.
  *   3. Rode a função `setup` uma vez (cria colunas e agenda o e-mail).
- *   4. Implantar → Nova implantação → App da Web (Executar como: Eu;
- *      Quem pode acessar: Qualquer pessoa).
+ *   4. Implantar → Gerenciar implantações → editar (lápis) → Versão: Nova.
+ *      Isso mantém a MESMA URL. "Nova implantação" cria outra URL e quebra
+ *      o app. Acesso: "Qualquer pessoa".
  */
 
 const CONFIG = {
