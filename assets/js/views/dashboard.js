@@ -17,8 +17,35 @@ function iconFor(cat) {
 }
 
 export function visibleDashboardItems() {
-  const { status, cat, search } = state.dashboard;
-  return sortItems(filterItems({ status, cat, search }), { key: 'days', dir: 'asc' });
+  const { status, cat, search, sort } = state.dashboard;
+  return sortItems(filterItems({ status, cat, search }), sort);
+}
+
+/**
+ * Ordenações do painel, no vocabulário da versão React (A-Z / Z-A por TAG).
+ * "Vencimento" segue como padrão: é a ordem que responde à pergunta que o app
+ * existe para responder — o que vence primeiro.
+ */
+export const SORT_OPTIONS = [
+  { key: 'days', dir: 'asc', label: 'Vencimento' },
+  { key: 'tag', dir: 'asc', label: 'TAG A-Z' },
+  { key: 'tag', dir: 'desc', label: 'TAG Z-A' },
+  { key: 'equip', dir: 'asc', label: 'Equipamento' },
+];
+
+export function renderSortToolbar() {
+  const host = el('sort-toolbar');
+  if (!host) return;
+  const { key, dir } = state.dashboard.sort;
+  host.innerHTML =
+    '<span class="sort-label">Ordenar</span>' +
+    SORT_OPTIONS.map((o) => {
+      const active = o.key === key && o.dir === dir;
+      return (
+        `<button type="button" class="pill-sort${active ? ' active' : ''}" ` +
+        `data-sort-key="${o.key}" data-sort-dir="${o.dir}" aria-pressed="${active}">${esc(o.label)}</button>`
+      );
+    }).join('');
 }
 
 export function resetDashboardPage() {
@@ -115,7 +142,7 @@ export function renderDashboard() {
 }
 
 /** Liga os eventos do painel uma única vez (delegação). */
-export function bindDashboard({ onClearFilters, onSelectCat }) {
+export function bindDashboard({ onClearFilters, onSelectCat, onSelectSort }) {
   const grid = el('grid');
   const openFromEvent = (target) => {
     const card = target.closest('[data-tag]');
@@ -143,6 +170,11 @@ export function bindDashboard({ onClearFilters, onSelectCat }) {
   el('cat-toolbar')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-cat]');
     if (btn) onSelectCat(btn.dataset.cat);
+  });
+
+  el('sort-toolbar')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sort-key]');
+    if (btn) onSelectSort(btn.dataset.sortKey, btn.dataset.sortDir);
   });
 
   el('load-more')?.addEventListener('click', () => {

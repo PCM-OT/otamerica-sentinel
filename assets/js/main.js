@@ -40,7 +40,9 @@ import {
   bindDashboard,
   renderCategoryPills,
   renderDashboard,
+  renderSortToolbar,
   resetDashboardPage,
+  SORT_OPTIONS,
 } from './views/dashboard.js';
 import { bindModal, openItemModal } from './views/modal.js';
 import { bindRegister } from './views/register.js';
@@ -82,6 +84,12 @@ function syncUrl() {
   if (state.dashboard.cat !== 'all') params.set('cat', state.dashboard.cat); else params.delete('cat');
   if (state.dashboard.search) params.set('q', state.dashboard.search); else params.delete('q');
 
+  // Só entra na URL quando difere do padrão, para não poluir o link com a
+  // ordenação que já é a inicial.
+  const { key, dir } = state.dashboard.sort;
+  if (key === 'days' && dir === 'asc') params.delete('sort');
+  else params.set('sort', `${key}:${dir}`);
+
   window.history.replaceState({}, '', url);
 }
 
@@ -95,6 +103,16 @@ function applyUrl() {
   }
   const cat = params.get('cat');
   if (cat) state.dashboard.cat = cat;
+
+  // Aceita só as combinações oferecidas na barra: um `sort` inventado na URL
+  // cairia no padrão do sortItems e a pílula ativa não bateria com a ordem.
+  const sort = params.get('sort');
+  if (sort) {
+    const [key, dir] = sort.split(':');
+    if (SORT_OPTIONS.some((o) => o.key === key && o.dir === dir)) {
+      state.dashboard.sort = { key, dir };
+    }
+  }
 
   const q = params.get('q');
   if (q) {
@@ -178,6 +196,7 @@ function renderAll() {
   renderBadges();
   renderQuickFilters();
   renderCategoryPills();
+  renderSortToolbar();
   renderDashboard();
   renderCategoryButtons();
   renderLocalOptions();
@@ -478,6 +497,13 @@ function init() {
       state.dashboard.cat = cat;
       resetDashboardPage();
       renderCategoryPills();
+      renderDashboard();
+      syncUrl();
+    },
+    onSelectSort: (key, dir) => {
+      state.dashboard.sort = { key, dir };
+      resetDashboardPage();
+      renderSortToolbar();
       renderDashboard();
       syncUrl();
     },

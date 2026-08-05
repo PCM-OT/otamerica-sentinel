@@ -23,7 +23,13 @@ export const state = {
   cachedAt: null,
   error: null,
 
-  dashboard: { status: new Set(['all']), cat: 'all', search: '', page: 1 },
+  dashboard: {
+    status: new Set(['all']),
+    cat: 'all',
+    search: '',
+    page: 1,
+    sort: { key: 'days', dir: 'asc' },
+  },
   bulk: { status: new Set(['all']), cat: new Set(['all']), local: '', search: '', sort: { key: 'days', dir: 'asc' } },
   export: { status: new Set(['all']), cat: new Set(['all']), local: '', search: '', sort: { key: 'days', dir: 'asc' } },
 

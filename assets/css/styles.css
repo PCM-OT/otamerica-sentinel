@@ -420,6 +420,38 @@ textarea {
 .pill-filter:hover { color: #fff; border-color: rgba(255, 255, 255, 0.25); }
 .pill-filter.active { background: #fff; color: #000; font-weight: 700; border-color: #fff; }
 
+/* Ordenação do painel. Visualmente subordinada às pílulas de categoria —
+   pílula azul, não branca — para não competir com o filtro principal. */
+.sort-toolbar { padding-top: 8px; align-items: center; }
+
+.sort-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.pill-sort {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pill-sort:hover { color: #fff; border-color: rgba(255, 255, 255, 0.25); }
+
+.pill-sort.active {
+  background: var(--brand-color);
+  border-color: var(--brand-color);
+  color: #fff;
+  font-weight: 700;
+}
+
 .dash-summary { padding: 12px 32px 0; font-size: 12px; color: var(--text-muted); }
 
 .scroll-container { flex: 1; overflow-y: auto; padding: 20px 32px 90px; }
