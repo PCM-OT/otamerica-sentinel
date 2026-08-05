@@ -50,6 +50,16 @@ const CONFIG = {
    */
   TOKEN: 'x3X0VrCGQiZ-en4OxGNeKcVbSGB_Ptnp',
 
+  /**
+   * Senha da área de avaliação de sugestões, validada AQUI, no servidor.
+   *
+   * Antes ela era comparada no navegador (`password === 'LGCurty'`), o que a
+   * colocava no JavaScript baixado por qualquer visitante — e num repositório
+   * público. Validando no servidor, o cliente envia só o que o usuário
+   * digitou e o segredo nunca sai daqui. Troque este valor.
+   */
+  ADMIN_PASSCODE: 'troque-esta-senha',
+
   /** URL pública do app (Vercel), usada nos links do e-mail de alerta. */
   APP_URL: 'https://otamerica-sentinel.vercel.app',
 
@@ -328,6 +338,12 @@ function doGet(e) {
         return json(getSuggestionsList());
       case 'audit':
         return json(readAudit(Number(params.limit) || 300));
+      case 'admin_check':
+        // Resposta uniforme: não revela se a senha está só errada ou se nem
+        // foi configurada no servidor.
+        return json({
+          success: Boolean(CONFIG.ADMIN_PASSCODE) && params.passcode === CONFIG.ADMIN_PASSCODE,
+        });
       default:
         // Sem `action` o app não tem o que fazer com HTML: melhor dizer isso
         // do que devolver uma página e o cliente falhar ao interpretar JSON.

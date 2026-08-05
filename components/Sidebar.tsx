@@ -201,7 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onFilter, 
         <a href="https://www.linkedin.com/in/lgcurty/" target="_blank" rel="noreferrer" className="mx-3 mb-3 p-3 rounded-xl border border-[#94a3b840] bg-gradient-to-br from-[rgba(59,130,246,0.12)] to-[rgba(37,99,235,0.05)] hover:from-[rgba(59,130,246,0.25)] hover:to-[rgba(37,99,235,0.18)] hover:border-brand-primary hover:shadow-[0_18px_40px_rgba(59,130,246,0.4)] hover:-translate-y-0.5 transition-all duration-300 group flex items-center gap-3 shrink-0">
           <Linkedin size={20} className="text-brand-primary" />
           <div className="flex flex-col">
-            <span className="text-[12px] font-bold text-white">Luís Gustavo Curty</span>
+            <span className="text-[12px] font-bold text-white">Administrador</span>
             <span className="text-[9px] text-brand-primary font-medium"> Developer LinkedIn</span>
           </div>
         </a>

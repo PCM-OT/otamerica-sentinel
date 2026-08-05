@@ -46,9 +46,16 @@ const ReviewSuggestionsView: React.FC = () => {
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const [checking, setChecking] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'LGCurty') {
+    // A senha não é mais comparada aqui: ela vive no Apps Script. Antes o
+    // literal ficava no bundle, legível por qualquer visitante.
+    setChecking(true);
+    const ok = await api.checkAdmin(password);
+    setChecking(false);
+    if (ok) {
       setIsAuthenticated(true);
       setError(false);
     } else {
@@ -77,11 +84,12 @@ const ReviewSuggestionsView: React.FC = () => {
               autoFocus
             />
             {error && <p className="text-xs text-red-500 font-bold">Senha incorreta.</p>}
-            <button 
+            <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20"
+              disabled={checking}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20"
             >
-              Desbloquear
+              {checking ? 'Verificando...' : 'Desbloquear'}
             </button>
           </form>
         </div>

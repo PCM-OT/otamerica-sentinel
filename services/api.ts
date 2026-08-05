@@ -119,6 +119,29 @@ export const api = {
     }
   },
 
+  /**
+   * Valida a senha da área restrita NO SERVIDOR.
+   *
+   * O cliente envia só o que o usuário digitou; a senha correta fica no
+   * Apps Script (CONFIG.ADMIN_PASSCODE) e nunca chega ao bundle. Isto barra
+   * quem lê o código-fonte, mas não quem mexe no próprio navegador: a porta
+   * real é restringir a implantação do Apps Script às contas da empresa.
+   */
+  checkAdmin: async (passcode: string): Promise<boolean> => {
+    try {
+      const response = await fetch(
+        withToken(`${API_URL}?action=admin_check&passcode=${encodeURIComponent(passcode)}`),
+        { method: 'GET', redirect: 'follow' },
+      );
+      if (!response.ok) return false;
+      const json = await response.json();
+      return json.success === true;
+    } catch (error) {
+      console.error('Falha ao validar a senha:', error);
+      return false;
+    }
+  },
+
   create: async (data: any, category: string) => {
     const payload = { ...data };
     
@@ -177,30 +200,5 @@ export const api = {
         redirect: 'follow'
     });
     return response.json();
-  },
-
-  // NOVA FUNÇÃO SEGURA: Chama a Serverless Function do Vercel
-  askGemini: async (prompt: string) => {
-    try {
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // Sem o token do Apps Script: esta rota é nossa, na mesma origem, e
-        // não tem por que receber o segredo do outro backend.
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Gemini Server Error: ${response.status}`);
-      }
-
-      const json = await response.json();
-      return json;
-    } catch (error) {
-      console.error('Error asking Gemini:', error);
-      throw error;
-    }
   }
 };

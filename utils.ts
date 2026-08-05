@@ -83,46 +83,89 @@ export interface TwinGroup {
   needsSwap: boolean;
 }
 
+/**
+ * Quantos números separam um manômetro do seu par.
+ *
+ * A frota é de 60 manômetros em 30 posições: o 1 e o 31 servem ao mesmo
+ * ponto, o 2 e o 32, e assim por diante. Enquanto um está instalado, o outro
+ * é a reserva calibrada — é isso que garante que a posição nunca fique sem
+ * manômetro válido. Quando o 02 se aproxima do vencimento, o 32 vai para
+ * calibração e depois assume o lugar dele.
+ */
+export const TWIN_OFFSET = 30;
+
+/** Dias de antecedência que disparam o aviso de troca. */
+export const TWIN_SWAP_WARN_DAYS = 30;
+
+/**
+ * Número do manômetro dentro da frota, lido do fim da TAG.
+ *
+ * Aceita "MAN-02", "MAN 02", "02" ou "MANOMETRO-032": o que importa são os
+ * dígitos finais. Devolve null quando não há número — TAG fora do padrão fica
+ * de fora do pareamento em vez de ser pareada errado.
+ */
+export function manometerNumber(tag: string | undefined | null): number | null {
+  const match = String(tag || '').trim().match(/(\d+)$/);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** O par de um número: 1..30 ↔ 31..60. Fora dessa faixa, não há par. */
+export function twinNumber(n: number): number | null {
+  if (n >= 1 && n <= TWIN_OFFSET) return n + TWIN_OFFSET;
+  if (n > TWIN_OFFSET && n <= TWIN_OFFSET * 2) return n - TWIN_OFFSET;
+  return null;
+}
+
+/**
+ * Pares de manômetros e quais precisam de troca.
+ *
+ * O pareamento vem da numeração da TAG, e não de um campo "função": essa
+ * coluna não existe na planilha, então a versão anterior desta função nunca
+ * formava um par sequer — procurava funcao === 'Principal' num dado que o
+ * backend não grava, e o aviso de troca jamais aparecia.
+ *
+ * Instalado = número baixo (1..30); reserva = o correspondente (31..60).
+ */
 export function detectTwinManometers(allData: Equipment[]): TwinGroup[] {
-  const manometers = allData.filter(item => 
-      item.categoria === 'MANÔMETROS' && isReallyActive(item)
-  );
-  
+  const byNumber = new Map<number, Equipment>();
+
+  allData.forEach(item => {
+    if (item.categoria !== 'MANÔMETROS' || !isReallyActive(item)) return;
+    const n = manometerNumber(item.tag);
+    if (n === null || twinNumber(n) === null) return;
+    // Havendo TAGs repetidas, fica a de vencimento mais distante: é o
+    // certificado que vale hoje para aquela posição.
+    const atual = byNumber.get(n);
+    if (!atual || (getDaysUntilExpiry(item) ?? -Infinity) > (getDaysUntilExpiry(atual) ?? -Infinity)) {
+      byNumber.set(n, item);
+    }
+  });
+
   const twins: TwinGroup[] = [];
-  const grouped: Record<string, Equipment[]> = {};
-  
-  manometers.forEach(m => {
-      // Grouping key: Local + Range (Faixa Indicacao)
-      const local = m.local || m.localizacao || 'Unknown';
-      const faixa = m.faixaIndicacao || 'Unknown';
-      const key = `${local}_${faixa}`;
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(m);
-  });
-  
-  Object.values(grouped).forEach(group => {
-      if (group.length === 2) {
-          const principal = group.find(m => m.funcao === 'Principal');
-          const reserva = group.find(m => m.funcao === 'Reserva');
-          
-          if (principal && reserva) {
-              const principalExpiry = parseDateSafe(principal.dataProximaCalibracao);
-              const reservaExpiry = parseDateSafe(reserva.dataProximaCalibracao);
-              
-              if (principalExpiry && reservaExpiry) {
-                  const now = Date.now();
-                  const daysUntilPrincipalExpiry = (principalExpiry - now) / (1000 * 60 * 60 * 24);
-                  
-                  twins.push({
-                      principal,
-                      reserva,
-                      // Logic: Swap needed if Principal is expiring soon (<30 days) AND Reserva has more time left than Principal
-                      needsSwap: daysUntilPrincipalExpiry < 30 && reservaExpiry > principalExpiry
-                  });
-              }
-          }
-      }
-  });
-  
+
+  for (let n = 1; n <= TWIN_OFFSET; n++) {
+    const principal = byNumber.get(n);
+    const reserva = byNumber.get(n + TWIN_OFFSET);
+    if (!principal || !reserva) continue;
+
+    const diasPrincipal = getDaysUntilExpiry(principal);
+    const diasReserva = getDaysUntilExpiry(reserva);
+
+    twins.push({
+      principal,
+      reserva,
+      // Troca quando o instalado está perto de vencer e a reserva dura mais.
+      // Faltando data em um dos dois não há como comparar, e afirmar "troque"
+      // sobre dado ausente seria pior do que não avisar.
+      needsSwap:
+        diasPrincipal !== null &&
+        diasReserva !== null &&
+        diasPrincipal <= TWIN_SWAP_WARN_DAYS &&
+        diasReserva > diasPrincipal,
+    });
+  }
+
   return twins;
 }
