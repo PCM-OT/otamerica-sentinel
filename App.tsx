@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, Suspense, useRef } from 'react';
+import { getWarnDays, useWarnDays } from './settings';
 import Sidebar from './components/Sidebar';
 import EquipmentCard from './components/EquipmentCard';
 import SortToolbar from './components/SortToolbar';
@@ -24,6 +25,7 @@ function App() {
   const [view, setView] = useState<ViewType>('dashboard');
   const [data, setData] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const warnDays = useWarnDays();
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filters
@@ -161,7 +163,7 @@ function App() {
     const days = getDaysUntilExpiry(item);
     if (days === null) return 'ok'; 
     if (days < 0) return 'danger';
-    if (days <= 45) return 'warn'; 
+    if (days <= warnDays) return 'warn';
     return 'ok';
   };
 
@@ -442,7 +444,7 @@ function App() {
         else if (item.status === 'Obsoleto') { statusText = "OBSOLETO"; statusColor = [100, 116, 139]; }
         else if (days !== null) {
             if (days < 0) { statusText = "VENCIDO"; statusColor = [239, 68, 68]; }
-            else if (days <= 45) { statusText = "ATENÇÃO"; statusColor = [245, 158, 11]; }
+            else if (days <= getWarnDays()) { statusText = "ATENÇÃO"; statusColor = [245, 158, 11]; }
         } else {
             statusText = "N/A";
             statusColor = [100, 116, 139]; 
@@ -739,10 +741,10 @@ function App() {
                             <span className={`px-4 py-2 rounded-lg text-sm font-bold shadow-lg ${
                                 daysUntilExpiry === null ? 'bg-slate-500/20 text-slate-400 border border-slate-500/30' :
                                 daysUntilExpiry < 0 ? 'bg-[#ef4444] text-white' : 
-                                daysUntilExpiry <= 45 ? 'bg-[#f59e0b] text-black' : 
+                                daysUntilExpiry <= warnDays ? 'bg-[#f59e0b] text-black' : 
                                 'bg-[#10b981] text-black'
                             }`}>
-                                {daysUntilExpiry === null ? 'N/A' : daysUntilExpiry < 0 ? 'VENCIDO' : daysUntilExpiry <= 45 ? 'ATENÇÃO' : 'VÁLIDO'}
+                                {daysUntilExpiry === null ? 'N/A' : daysUntilExpiry < 0 ? 'VENCIDO' : daysUntilExpiry <= warnDays ? 'ATENÇÃO' : 'VÁLIDO'}
                             </span>
                         </div>
                       </div>

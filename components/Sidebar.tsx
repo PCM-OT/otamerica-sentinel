@@ -1,3 +1,4 @@
+import { MAX_WARN_DAYS, MIN_WARN_DAYS, setWarnDays, useWarnDays } from '../settings';
 import React, { useState } from 'react';
 import { 
   ShieldCheck, LayoutDashboard, BarChart3, CheckCircle2, 
@@ -16,6 +17,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onFilter, activeFilters, stats }) => {
+  const warnDays = useWarnDays();
   // Estado para controlar se o menu está aberto no celular
   const [isOpen, setIsOpen] = useState(false);
 
@@ -194,6 +196,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onFilter, 
               <NavItem view="suggestions" icon={Lightbulb} label="Sugestões" />
               <NavItem view="review-suggestions" icon={ListChecks} label="Avaliar Sugestões" />
               <NavItem view="manual" icon={BookOpen} label="Manual do Usuário" />
+            </div>
+          </section>
+
+          <section className="mb-4">
+            <div className="text-[10px] font-bold text-[#64748b] uppercase tracking-[1.5px] mb-1.5 ml-2 flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-brand-primary rounded-full"></span> Configurações
+            </div>
+            <div className="px-2 py-2 rounded-lg bg-[rgba(17,24,39,0.6)] border border-[rgba(148,163,184,0.15)]">
+              <label htmlFor="warn-days" className="block text-[11px] text-[#94a3b8] mb-1.5 leading-snug">
+                Alertar como <span className="text-[#f59e0b] font-bold">ATENÇÃO</span> a partir de:
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="warn-days"
+                  type="number"
+                  min={MIN_WARN_DAYS}
+                  max={MAX_WARN_DAYS}
+                  value={warnDays}
+                  onChange={(e) => setWarnDays(Number(e.target.value))}
+                  className="w-20 bg-[rgba(0,0,0,0.35)] border border-[rgba(148,163,184,0.25)] rounded-md px-2 py-1 text-[13px] text-white font-mono focus:border-[#3b82f6] outline-none"
+                />
+                <span className="text-[11px] text-[#64748b]">dias antes de vencer</span>
+              </div>
             </div>
           </section>
         </div>

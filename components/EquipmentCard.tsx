@@ -1,3 +1,4 @@
+import { useWarnDays } from '../settings';
 import React from 'react';
 import { Eye, MapPin, Calendar, Layers, ArrowRightLeft } from 'lucide-react';
 import { Equipment } from '../types';
@@ -12,6 +13,7 @@ interface EquipmentCardProps {
 }
 
 const EquipmentCard: React.FC<EquipmentCardProps> = ({ item, onViewDetails, statusOverride, isTwin, swapAction }) => {
+  const warnDays = useWarnDays();
   const days = getDaysUntilExpiry(item);
   
   let statusColor = 'from-brand-primary to-brand-secondary'; 
@@ -35,7 +37,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({ item, onViewDetails, stat
       statusText = 'VENCIDO';
       badgeClass = 'bg-[rgba(239,68,68,0.1)] text-[#f87171] border-[rgba(239,68,68,0.3)]';
       themeStatus = 'VENCIDO';
-    } else if (days <= 45) { 
+    } else if (days <= warnDays) {
       statusColor = 'from-[#f59e0b] to-[#fbbf24]';
       statusText = 'PRÓXIMO';
       badgeClass = 'bg-[rgba(245,158,11,0.1)] text-[#fbbf24] border-[rgba(245,158,11,0.3)]';
