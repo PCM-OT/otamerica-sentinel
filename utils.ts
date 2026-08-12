@@ -61,9 +61,21 @@ export function getStatusHierarchical(item: Equipment): 'Ativo' | 'Reprovado' | 
   return 'Ativo';
 }
 
+/**
+ * Data de vencimento do item, seja qual for o nome do campo na categoria:
+ * manômetros usam dataProximaCalibracao, demais equipamentos
+ * dataProximaInspecao e NR-10 dataValidade.
+ *
+ * Existe para que ninguém mais remonte essa cadeia por conta própria — o PDF
+ * de exportação omitia dataValidade e, por isso, imprimia "N/A" na validade
+ * de TODO item de NR-10, enquanto a tela ao lado mostrava a data certa.
+ */
+export function expiryTimestamp(item: Equipment): number | null {
+  return parseDateSafe(item.dataProximaCalibracao || item.dataProximaInspecao || item.dataValidade);
+}
+
 export function getDaysUntilExpiry(item: Equipment): number | null {
-  const nextDate = item.dataProximaCalibracao || item.dataProximaInspecao || item.dataValidade;
-  const ts = parseDateSafe(nextDate);
+  const ts = expiryTimestamp(item);
   if (!ts) return null;
   
   const now = new Date();

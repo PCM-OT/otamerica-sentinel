@@ -1,7 +1,8 @@
 import React from 'react';
 import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { Equipment, FORM_CONFIG } from '../../types';
-import { formatDateBR, parseDateSafe, getDaysUntilExpiry, getStatusHierarchical } from '../../utils';
+import { expiryTimestamp, formatDateBR, getDaysUntilExpiry, getStatusHierarchical } from '../../utils';
+import { useWarnDays } from '../../settings';
 
 // Declare window for libraries
 declare const window: any;
@@ -13,6 +14,16 @@ interface ExportViewProps {
 }
 
 const ExportView: React.FC<ExportViewProps> = ({ exportFilters, setExportFilters, filteredExportList }) => {
+  const warnDays = useWarnDays();
+
+  /** Mesmo vocabulário do filtro e dos cards: validade, não ciclo de vida. */
+  const validityLabel = (item: Equipment): string => {
+    const days = getDaysUntilExpiry(item);
+    if (days === null) return 'Sem data';
+    if (days < 0) return 'Vencido';
+    return days <= warnDays ? 'Atenção' : 'Válido';
+  };
+
   const exportData = (format: 'pdf' | 'excel') => {
     const list = filteredExportList;
     if (format === 'excel') {
@@ -24,13 +35,14 @@ const ExportView: React.FC<ExportViewProps> = ({ exportFilters, setExportFilters
         const doc = new window.jspdf.jsPDF('l');
         doc.text("Relatório de Exportação - Sentinel Nexus", 14, 15);
         (doc as any).autoTable({
-            head: [['#', 'TAG', 'Categoria', 'Local', 'Validade', 'Status']],
+            head: [['#', 'TAG', 'Categoria', 'Local', 'Validade', 'Situação', 'Registro']],
             body: list.map((i, idx) => [
                 idx + 1,
                 i.tag, 
                 i.categoria, 
                 i.local || i.localizacao || '-', 
-                formatDateBR(parseDateSafe(i.dataProximaCalibracao || i.dataProximaInspecao)),
+                formatDateBR(expiryTimestamp(i)),
+                validityLabel(i),
                 getStatusHierarchical(i)
             ]),
             startY: 20,
@@ -92,14 +104,14 @@ const ExportView: React.FC<ExportViewProps> = ({ exportFilters, setExportFilters
                                 <td className="p-4 text-sm font-mono text-white font-bold">{item.tag}</td>
                                 <td className="p-4 text-sm text-[#cbd5e1]">{item.equipamento || item.modelo}</td>
                                 <td className="p-4 text-sm text-[#94a3b8]">{item.local || item.localizacao}</td>
-                                <td className="p-4 text-sm text-[#94a3b8]">{formatDateBR(parseDateSafe(item.dataProximaCalibracao || item.dataProximaInspecao || item.dataValidade))}</td>
+                                <td className="p-4 text-sm text-[#94a3b8]">{formatDateBR(expiryTimestamp(item))}</td>
                                 <td className="p-4">
                                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
                                         getDaysUntilExpiry(item) === null ? 'bg-slate-500/20 text-slate-400' :
                                         getDaysUntilExpiry(item)! < 0 ? 'bg-red-500/20 text-red-400' : 
-                                        getDaysUntilExpiry(item)! <= 45 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+                                        getDaysUntilExpiry(item)! <= warnDays ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
                                     }`}>
-                                        {getDaysUntilExpiry(item) === null ? 'N/A' : getDaysUntilExpiry(item)! < 0 ? 'Vencido' : getDaysUntilExpiry(item)! <= 45 ? 'Atenção' : 'Válido'}
+                                        {getDaysUntilExpiry(item) === null ? 'N/A' : getDaysUntilExpiry(item)! < 0 ? 'Vencido' : getDaysUntilExpiry(item)! <= warnDays ? 'Atenção' : 'Válido'}
                                     </span>
                                 </td>
                             </tr>
