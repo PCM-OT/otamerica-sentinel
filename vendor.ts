@@ -15,13 +15,16 @@
  * agora seria risco sem ganho. O import garante que existam antes do React
  * montar.
  */
-import jsPDFAutoTable from 'jspdf-autotable';
+import { applyPlugin } from 'jspdf-autotable';
 import QRious from 'qrious';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 
-// jspdf-autotable registra o método autoTable no protótipo do jsPDF.
-void jsPDFAutoTable;
+// O jspdf-autotable 5 NÃO registra mais o método sozinho ao ser importado —
+// a versão 3, que vinha do CDN, fazia isso. Sem applyPlugin, doc.autoTable é
+// undefined e a exportação em PDF morre antes de gerar o arquivo, sem
+// nenhum download e sem erro visível na tela.
+applyPlugin(jsPDF);
 
 const w = window as any;
 w.QRious = QRious;
