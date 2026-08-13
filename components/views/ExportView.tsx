@@ -1,8 +1,9 @@
 import React from 'react';
 import { Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { Equipment, FORM_CONFIG } from '../../types';
-import { expiryTimestamp, formatDateBR, getDaysUntilExpiry, getStatusHierarchical } from '../../utils';
+import { expiryTimestamp, formatDateBR, getDaysUntilExpiry } from '../../utils';
 import { useWarnDays } from '../../settings';
+import { generateExportPdf } from '../../services/exportPdf';
 
 // Declare window for libraries
 declare const window: any;
@@ -16,14 +17,6 @@ interface ExportViewProps {
 const ExportView: React.FC<ExportViewProps> = ({ exportFilters, setExportFilters, filteredExportList }) => {
   const warnDays = useWarnDays();
 
-  /** Mesmo vocabulário do filtro e dos cards: validade, não ciclo de vida. */
-  const validityLabel = (item: Equipment): string => {
-    const days = getDaysUntilExpiry(item);
-    if (days === null) return 'Sem data';
-    if (days < 0) return 'Vencido';
-    return days <= warnDays ? 'Atenção' : 'Válido';
-  };
-
   const exportData = (format: 'pdf' | 'excel') => {
     const list = filteredExportList;
     if (format === 'excel') {
@@ -32,22 +25,8 @@ const ExportView: React.FC<ExportViewProps> = ({ exportFilters, setExportFilters
         window.XLSX.utils.book_append_sheet(wb, ws, "Export");
         window.XLSX.writeFile(wb, "sentinel_export.xlsx");
     } else {
-        const doc = new window.jspdf.jsPDF('l');
-        doc.text("Relatório de Exportação - Sentinel Nexus", 14, 15);
-        (doc as any).autoTable({
-            head: [['#', 'TAG', 'Categoria', 'Local', 'Validade', 'Situação', 'Registro']],
-            body: list.map((i, idx) => [
-                idx + 1,
-                i.tag, 
-                i.categoria, 
-                i.local || i.localizacao || '-', 
-                formatDateBR(expiryTimestamp(i)),
-                validityLabel(i),
-                getStatusHierarchical(i)
-            ]),
-            startY: 20,
-        });
-        doc.save("sentinel_relatorio.pdf");
+        // Layout, cartões de resumo e cores por situação: services/exportPdf.ts.
+        generateExportPdf(list, exportFilters, warnDays);
     }
   };
 
